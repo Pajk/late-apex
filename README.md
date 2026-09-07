@@ -59,7 +59,9 @@ comparable with one set dodging oncoming traffic.
 <img src="docs/garage.png" width="420" align="right" alt="Car select screen">
 
 Eight vehicles, and the choice genuinely matters — the heavy ones need braking
-points a good deal earlier, and no single car is best everywhere.
+points a good deal earlier, and no single car is best everywhere. The four bars
+are top speed, acceleration, cornering grip, and **armour**: how well the car
+shrugs off contact. More is better on all four.
 
 None of them is a real vehicle. Car names, badges *and body shapes* are all
 separately protected, so these are original designs rather than filed-off

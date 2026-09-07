@@ -7,7 +7,8 @@ handling enough to change which circuit suits it.
 speed  top speed, as a fraction of the reference car
 accel  how hard it pulls
 grip   steering authority; low grip means you must brake earlier
-mass   how well it shrugs off contact (higher loses less speed)
+mass   how well it shrugs off contact (higher loses less speed);
+       shown as ARMOUR in the garage, where more is always better
 turbos how many boosts you get in a race
 engine which engine family it sounds like
 """
@@ -61,5 +62,5 @@ def stat_bars(car):
         ('SPEED', (car['speed'] - 0.88) / 0.26),
         ('ACCEL', (car['accel'] - 0.85) / 0.52),
         ('GRIP', (car['grip'] - 0.82) / 0.52),
-        ('BULK', (car['mass'] - 0.40) / 1.05),
+        ('ARMOUR', (car['mass'] - 0.40) / 1.05),
     ]

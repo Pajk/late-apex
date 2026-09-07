@@ -25,6 +25,14 @@ BASE_SCALE = 3
 (S_TITLE, S_SELECT, S_DIFF, S_CAR, S_RACE, S_PAUSE, S_RESULT, S_NAME,
  S_SCORES, S_HELP) = range(10)
 
+# Garage layout, named so the rows cannot silently collide again.
+STATS_TOP = 146
+STATS_ROW = 8
+STATS_ROWS = 4
+STATS_BOTTOM = STATS_TOP + (STATS_ROWS - 1) * STATS_ROW + 5
+DOTS_TOP = 179
+HELP_TOP = 190
+
 ACCENT = (255, 210, 60)
 ACCENT2 = (255, 90, 90)
 INK = (236, 240, 250)
@@ -666,15 +674,17 @@ class App:
         pf.draw_text(s, '>', BASE_WIDTH - 28, 74, ACCENT
                      if int(self.blink * 3) % 2 == 0 else DIM, 2)
 
-        pf.draw_text(s, car['name'], BASE_WIDTH // 2, 124, ACCENT, 2, center=True,
-                     shadow=(60, 12, 24))
-        pf.draw_text(s, car['blurb'], BASE_WIDTH // 2, 140, INK, 1, center=True)
+        pf.draw_text(s, car['name'], BASE_WIDTH // 2, 122, ACCENT, 2,
+                     center=True, shadow=(60, 12, 24))
+        pf.draw_text(s, car['blurb'], BASE_WIDTH // 2, 137, INK, 1,
+                     center=True)
 
         # stat bars
-        x0, y = 92, 152
-        for label, value in garage.stat_bars(car):
+        x0 = 92
+        bw = 128
+        for row, (label, value) in enumerate(garage.stat_bars(car)):
+            y = STATS_TOP + row * STATS_ROW
             pf.draw_text(s, label, x0 - 6, y, DIM, 1, right=True)
-            bw = 128
             s.fill((38, 40, 56), (x0, y, bw, 5))
             n = max(2, int(bw * max(0.0, min(1.0, value))))
             for i in range(n):
@@ -682,14 +692,17 @@ class App:
                 col = (90, 220, 110) if t < 0.55 else (
                     (255, 210, 70) if t < 0.8 else (255, 120, 60))
                 s.fill(col, (x0 + i, y, 1, 5))
-            y += 9
 
-        for i in range(len(garage.CARS)):
-            x = BASE_WIDTH // 2 - len(garage.CARS) * 5 + i * 10
+        # which of the cars you are on. Kept clear of the stat rows: these
+        # used to be drawn straight over the last bar.
+        n_cars = len(garage.CARS)
+        pitch = 8
+        left = BASE_WIDTH // 2 - (n_cars * pitch - 2) // 2
+        for i in range(n_cars):
             s.fill(ACCENT if i == self.car_sel else (70, 74, 96),
-                   (x, BASE_HEIGHT - 19, 6, 3))
+                   (left + i * pitch, DOTS_TOP, 6, 3))
         pf.draw_text(s, 'LEFT/RIGHT CHANGE   ENTER GO   ESC BACK',
-                     BASE_WIDTH // 2, BASE_HEIGHT - 10, DIM, 1, center=True)
+                     BASE_WIDTH // 2, HELP_TOP, DIM, 1, center=True)
 
     def draw_result(self, s):
         self.overlay(s, 205)

@@ -80,6 +80,30 @@ def run():
     press(pygame.K_LEFT)
     step(5)
 
+    # the garage rows must not collide: the selector dots were once drawn
+    # straight over the last stat bar, which looked like corruption
+    from game.app import (STATS_TOP, STATS_ROW, STATS_ROWS, STATS_BOTTOM,
+                          DOTS_TOP, HELP_TOP)
+    from game import cars as garage2
+    c.check(DOTS_TOP > STATS_BOTTOM,
+            'the car selector dots overlap the stat bars (dots at %d, bars '
+            'end at %d)' % (DOTS_TOP, STATS_BOTTOM))
+    c.check(HELP_TOP > DOTS_TOP + 2,
+            'the help line overlaps the selector dots')
+    c.check(STATS_ROWS == len(garage2.stat_bars(garage2.CARS[0])),
+            'the garage reserves %d rows but draws %d stats'
+            % (STATS_ROWS, len(garage2.stat_bars(garage2.CARS[0]))))
+    pitch = 8
+    width = len(garage2.CARS) * pitch - 2
+    c.check(width < 320 - 20,
+            'the selector dots for %d cars do not fit across the screen'
+            % len(garage2.CARS))
+    labels = [lbl for lbl, _ in garage2.stat_bars(garage2.CARS[0])]
+    c.check(all(len(lbl) <= 6 for lbl in labels),
+            'a stat label is too long for its column: %s' % labels)
+    c.note('garage rows: bars %d-%d, dots %d, help %d'
+           % (STATS_TOP, STATS_BOTTOM, DOTS_TOP, HELP_TOP))
+
     press(pygame.K_RETURN)
     step(40)
     c.check(app.state == S_RACE, 'enter did not start a race')
