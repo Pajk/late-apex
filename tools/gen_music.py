@@ -457,10 +457,10 @@ def engine_loop(spec, step, rng):
     # intake and exhaust roar, brighter and louder the harder it is working
     width = max(2, int(46 - step * 2.4))
     nz = circ_lowpass(rng.uniform(-1, 1, n), width)
-    sig += nz * spec['noise'] * (0.6 + 0.5 * step / 15.0)
+    sig += nz * spec['noise'] * (0.62 + 0.26 * step / 15.0)
 
     sig /= np.max(np.abs(sig)) or 1.0
-    drive = spec['drive'] * (1.0 + 0.30 * step / 15.0)
+    drive = spec['drive'] * (1.0 + 0.16 * step / 15.0)
     sig = np.tanh(sig * drive) / np.tanh(drive)
     sig = circ_lowpass(sig, max(2, int(9 - spec['bright'] * 6)))
     sig /= np.max(np.abs(sig)) or 1.0

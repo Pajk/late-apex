@@ -212,7 +212,9 @@ little timing jitter on each firing. Four families — V8, V12, four and diesel
 — at sixteen engine speeds each, and the game crossfades between neighbouring
 steps so the note tracks the six-speed gearbox. On top of that sit a wind and
 intake layer tied to road speed, a turbo whistle while the boost is lit, and a
-clack with a momentary duck on every gearchange.
+clack with a momentary duck on every gearchange. Engine level follows the revs
+rather than road speed, so a steady 300 km/h in top is quieter than a redline
+moment in third and the wind carries the sense of speed.
 
 The game renders internally at 320×200 and scales the whole frame up, which is
 what keeps the pixels chunky at any window size.

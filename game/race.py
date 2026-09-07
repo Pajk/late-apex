@@ -27,6 +27,11 @@ GEARS = 6
 # are close together low down and long at the top, which is what makes the
 # box sound busy off the line and relaxed flat out.
 GEAR_TOPS = (0.14, 0.28, 0.44, 0.61, 0.80, 1.00)
+# Revs follow speed divided by the gear ratio, so a shift drops them by the
+# ratio step and drops them less as the gears close up. Top is an overdrive:
+# flat out you are well short of the limiter, not sitting on it.
+TOP_GEAR_CEILING = 0.70
+IDLE_RPM = 0.18
 PLAYER_W = 0.32       # car width in road half-widths
 RIVAL_W = 0.32        # rivals are the same width, and must look it
 TRUCK_W = 0.42
@@ -245,14 +250,12 @@ class Race:
         if self.state == self.STATE_COUNTDOWN:
             return 1, clamp(self.revs, 0.0, 1.0)
         r = clamp(self.player.speed / self.top_speed, 0.0, 1.0)
-        lo = 0.0
         for i, hi in enumerate(GEAR_TOPS):
             if r <= hi or i == GEARS - 1:
-                span = hi - lo
-                frac = (r - lo) / span if span > 0 else 0.0
-                return i + 1, 0.20 + 0.80 * clamp(frac, 0.0, 1.0)
-            lo = hi
-        return GEARS, 1.0
+                ceiling = TOP_GEAR_CEILING if i == GEARS - 1 else 1.0
+                rpm = ceiling * (r / hi) if hi > 0 else 0.0
+                return i + 1, clamp(max(rpm, IDLE_RPM), 0.0, 1.0)
+        return GEARS, TOP_GEAR_CEILING
 
     # -- simulation -----------------------------------------------------
     def update(self, dt, keys):
@@ -374,9 +377,12 @@ class Race:
         if gear != self.gear:
             self.audio.shift()
             self.gear = gear
-        self.audio.engine(rpm, 0.35 + 0.65 * speed_pct if keys['accel']
-                          else 0.18 + 0.4 * speed_pct)
-        self.audio.roar(speed_pct ** 1.5)
+        # Level follows the revs, not road speed: in top gear at a steady
+        # 300 km/h the engine is loafing and the wind does the work, which is
+        # what stops the fast sections becoming a wall of noise.
+        self.audio.engine(rpm, (0.28 + 0.45 * rpm) if keys['accel']
+                          else (0.12 + 0.28 * rpm))
+        self.audio.roar(speed_pct ** 1.4)
         self.audio.turbo(boosting, 0.6 + 0.4 * speed_pct)
         skid = (abs(p.steer) > 0.55 and speed_pct > 0.55 and
                 abs(seg.curve) > 1.5) or p.offroad or \
