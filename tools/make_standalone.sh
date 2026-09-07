@@ -9,14 +9,14 @@ cd "$(dirname "$0")/.."
 
 if ! .venv/bin/python -c "import PyInstaller" 2>/dev/null; then
     echo "Installing PyInstaller..."
-    .venv/bin/pip install --quiet pyinstaller
+    .venv/bin/python -m pip install --quiet pyinstaller
 fi
 
 [ -f assets/icon.icns ] || ./tools/make_icns.sh
 
 echo "Building (this takes a minute)..."
 rm -rf build dist
-.venv/bin/pyinstaller --noconfirm --clean LateApex.spec
+.venv/bin/python -m PyInstaller --noconfirm --clean LateApex.spec
 
 APP="dist/Late Apex.app"
 [ -d "$APP" ] || { echo "Build failed: $APP not produced" >&2; exit 1; }
