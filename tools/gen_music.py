@@ -374,38 +374,133 @@ def gen_music():
 
 ENGINE_STEPS = 16
 
+# One entry per engine family. A four-stroke fires each cylinder once every
+# two revolutions, so `firings` is cylinders/2 per revolution.
+ENGINES = {
+    'v8': dict(firings=4, jitter=0.040, res=104, decay=105, noise=0.22,
+               drive=1.5, sub=0.42, base=42, span=0.150, bright=0.55),
+    'v12': dict(firings=6, jitter=0.006, res=182, decay=150, noise=0.16,
+                drive=1.3, sub=0.14, base=46, span=0.150, bright=0.80),
+    'four': dict(firings=2, jitter=0.014, res=158, decay=95, noise=0.26,
+                 drive=1.7, sub=0.10, base=56, span=0.155, bright=0.90),
+    'diesel': dict(firings=2, jitter=0.034, res=74, decay=62, noise=0.34,
+                   drive=1.9, sub=0.30, base=32, span=0.132, bright=0.32,
+                   clatter=1.10),
+}
+
+
+def circ_lowpass(x, width):
+    """Moving average that wraps around the end of the buffer.
+
+    The ordinary one starts from a cold state, so the first `width` samples
+    come out attenuated and the loop clicks at the seam. Filtering circularly
+    keeps a loop a loop.
+    """
+    width = int(width)
+    if width < 2:
+        return x
+    n = len(x)
+    ext = np.concatenate([x, x[:width]])
+    c = np.cumsum(np.insert(ext, 0, 0))
+    return (c[width:width + n] - c[:n]) / width
+
+
+def _burst(res, decay, clatter, rng, length):
+    """One exhaust pulse: a resonant thump with a little mechanical clatter."""
+    t = np.arange(length) / SR
+    env = np.exp(-t * decay)
+    w = (np.sin(2 * np.pi * res * t)
+         + 0.55 * np.sin(2 * np.pi * res * 2.0 * t + 0.7)
+         + 0.30 * np.sin(2 * np.pi * res * 3.7 * t + 1.9))
+    if clatter:
+        w += clatter * rng.uniform(-1, 1, length) * np.exp(-t * decay * 3.2)
+    return w * env
+
+
+def engine_loop(spec, step, rng):
+    """A seamless loop of an engine turning at one speed.
+
+    Built from firing impulses rather than a stack of sine harmonics: the
+    pulse train is what makes an engine sound like an engine, and adding the
+    bursts with wraparound means the loop joins itself perfectly with no
+    crossfade over the seam.
+    """
+    rise = 1.0 + step * spec['span']
+    f_rev = spec['base'] * rise
+    revs = max(4, int(round(f_rev * 0.30)))
+    revs += revs % 2                       # even, so half-order sits in tune
+    n = int(round(SR * revs / f_rev))
+    f_rev = SR * revs / n                  # exact, for a clean loop
+
+    firings = spec['firings']
+    kernel = _burst(spec['res'] * (0.85 + 0.30 * rise), spec['decay'],
+                    spec.get('clatter', 0.0), rng,
+                    min(n, int(SR * 0.075)))
+    sig = np.zeros(n)
+    per_rev = n / revs
+    for r in range(revs):
+        for k in range(firings):
+            # a little jitter on each firing is what gives a V8 its burble
+            wobble = spec['jitter'] * (1 if (r + k) % 2 else -1)
+            pos = int((r + (k + 0.5) / firings + wobble) * per_rev) % n
+            end = pos + len(kernel)
+            if end <= n:
+                sig[pos:end] += kernel
+            else:                          # wrap, keeping the loop seamless
+                cut = n - pos
+                sig[pos:] += kernel[:cut]
+                sig[:end - n] += kernel[cut:]
+
+    t = np.arange(n) / SR
+    if spec['sub']:
+        sig += spec['sub'] * np.sin(2 * np.pi * (f_rev / 2) * t)
+    # intake and exhaust roar, brighter and louder the harder it is working
+    width = max(2, int(46 - step * 2.4))
+    nz = circ_lowpass(rng.uniform(-1, 1, n), width)
+    sig += nz * spec['noise'] * (0.6 + 0.5 * step / 15.0)
+
+    sig /= np.max(np.abs(sig)) or 1.0
+    drive = spec['drive'] * (1.0 + 0.30 * step / 15.0)
+    sig = np.tanh(sig * drive) / np.tanh(drive)
+    sig = circ_lowpass(sig, max(2, int(9 - spec['bright'] * 6)))
+    sig /= np.max(np.abs(sig)) or 1.0
+    return sig
+
 
 def gen_engine():
-    """Seamless loops at rising RPM. The game crossfades between them so the
-    engine note tracks the rev counter."""
+    """A bank of seamless loops per engine family, at rising revs. The game
+    crossfades between neighbouring steps so the note tracks the rev counter."""
     made = []
-    rng = np.random.default_rng(99)
-    for i in range(ENGINE_STEPS):
-        f = 46.0 * (1.0 + i * 0.145)
-        cycles = 20
-        n = int(round(SR * cycles / f))
-        t = np.arange(n) / SR
-        sig = np.zeros(n)
-        for h, amp in ((1, 1.0), (2, 0.55), (3, 0.36), (4, 0.22), (6, 0.14),
-                       (8, 0.09)):
-            ph = rng.uniform(0, 2 * np.pi)
-            sig += amp * np.sin(2 * np.pi * f * h * t + ph)
-        # uneven firing gives it some grit
-        sig += 0.35 * saw(f * 2, n)
-        nz = rng.uniform(-1, 1, n)
-        nz = fast_lowpass(nz, max(2, int(60 - i * 3)))
-        sig += nz * (0.5 + i * 0.05)
-        sig = fast_lowpass(sig, max(2, int(16 - i * 0.7)))
-        sig /= np.max(np.abs(sig)) or 1.0
-        sig = np.tanh(sig * 1.6) / np.tanh(1.6)
-        # equal-power crossfade over the seam so the loop is click-free
-        x = int(n * 0.06)
-        head = sig[:x].copy()
-        sig[:x] = sig[:x] * np.linspace(0, 1, x) + \
-            sig[-x:] * np.linspace(1, 0, x)
-        sig[-x:] = sig[-x:] * np.linspace(1, 0, x) + head * np.linspace(0, 1, x)
-        write_wav(os.path.join(OUT, 'engine_%02d.wav' % i), sig * 0.85)
-        made.append('engine_%02d' % i)
+    for family, spec in ENGINES.items():
+        rng = np.random.default_rng(abs(hash(family)) % 10000)
+        for i in range(ENGINE_STEPS):
+            sig = engine_loop(spec, i, rng)
+            name = 'engine_%s_%02d' % (family, i)
+            write_wav(os.path.join(OUT, name + '.wav'), sig * 0.88)
+            made.append(name)
+
+    # a broadband layer that rides on top, tied to road speed
+    rng = np.random.default_rng(7)
+    n = int(1.6 * SR)
+    nz = circ_lowpass(rng.uniform(-1, 1, n), 5)
+    nz -= circ_lowpass(nz, 60)
+    nz /= np.max(np.abs(nz)) or 1.0
+    write_wav(os.path.join(OUT, 'engine_roar.wav'), nz * 0.7)
+    made.append('engine_roar')
+
+    # turbo whistle, looped while the boost is lit
+    n = int(0.5 * SR)
+    t = np.arange(n) / SR
+    base_hz = round(2450 * n / SR) * SR / n      # whole cycles in the loop
+    vib_hz = round(11 * n / SR) * SR / n
+    whine = np.zeros(n)
+    for h, a in ((1, 1.0), (2, 0.35), (3, 0.12)):
+        whine += a * np.sin(2 * np.pi * base_hz * h * t
+                            + 0.6 * np.sin(2 * np.pi * vib_hz * t))
+    whine += 0.25 * circ_lowpass(rng.uniform(-1, 1, n), 3)
+    whine /= np.max(np.abs(whine)) or 1.0
+    write_wav(os.path.join(OUT, 'engine_turbo.wav'), whine * 0.5)
+    made.append('engine_turbo')
     return made
 
 
@@ -465,6 +560,21 @@ def gen_sfx():
     out('sfx_extend', np.concatenate([beep(659, 0.09, duty=0.5, decay=16),
                                       beep(880, 0.09, duty=0.5, decay=16),
                                       beep(1318, 0.26, duty=0.5, decay=8)]))
+
+    # gearchange: a mechanical clack with a hint of driveline
+    n = int(0.10 * SR)
+    t = np.arange(n) / SR
+    clack = rng.uniform(-1, 1, n) * np.exp(-t * 150)
+    clack += np.sin(2 * np.pi * 220 * t) * np.exp(-t * 90) * 0.5
+    clack += np.sin(2 * np.pi * 1400 * t) * np.exp(-t * 210) * 0.3
+    out('sfx_shift', clack, 0.45)
+
+    # turbo dump valve on lift
+    n = int(0.34 * SR)
+    t = np.arange(n) / SR
+    air = fast_lowpass(rng.uniform(-1, 1, n), 3)
+    air = air - fast_lowpass(air, 26)
+    out('sfx_blowoff', air * np.exp(-t * 11) * (1 - np.exp(-t * 300)), 0.6)
 
     # short victory fanfare (played over the results screen)
     fan = []

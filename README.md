@@ -67,13 +67,13 @@ copies of anything.
 
 <br clear="right">
 
-| Car | Character |
-| --- | --- |
-| **Scarab V8** | Mid-engined wedge. The reference car — balanced everywhere |
-| **Meridian GT** | Big grand tourer. Highest top speed, lazy turn-in, wants long straights |
-| **Bantam 16V** | Light and eager. Slowest flat out, superb through the tight stuff |
-| **Medivac 90** | An ambulance. Sirens on: the field pulls over for you |
-| **Tourer 800** | Eight seats of defiance. Heavy, slow, shrugs off contact |
+| Car | Character | Engine |
+| --- | --- | --- |
+| **Scarab V8** | Mid-engined wedge. The reference car — balanced everywhere | V8 burble |
+| **Meridian GT** | Big grand tourer. Highest top speed, lazy turn-in, wants long straights | Smooth V12 |
+| **Bantam 16V** | Light and eager. Slowest flat out, superb through the tight stuff | Buzzy four |
+| **Medivac 90** | An ambulance. Sirens on: the field pulls over for you | Diesel clatter |
+| **Tourer 800** | Eight seats of defiance. Heavy, slow, shrugs off contact | Diesel clatter |
 
 Every car can finish every circuit — that is
 [enforced by the test suite](tests/test_balance.py), so the slow ones are a
@@ -202,8 +202,17 @@ locally built apps are never quarantined.
 All of them are deterministic, so changing a colour or a melody and re-running
 gives a consistent set. `gen_music.py` synthesises the music from pulse,
 triangle and saw oscillators through a small bass/arpeggio/drum sequencer, and
-writes sixteen seamless engine loops that the game crossfades between so the
-engine note follows the revs.
+writes the engine loops.
+
+Those are built from firing impulses rather than a stack of sine harmonics,
+which is what makes an engine sound like an engine rather than an organ: one
+exhaust pulse per firing event, laid down with wraparound so each loop joins
+itself seamlessly, plus a half-order component for the V8's burble and a
+little timing jitter on each firing. Four families — V8, V12, four and diesel
+— at sixteen engine speeds each, and the game crossfades between neighbouring
+steps so the note tracks the six-speed gearbox. On top of that sit a wind and
+intake layer tied to road speed, a turbo whistle while the boost is lit, and a
+clack with a momentary duck on every gearchange.
 
 The game renders internally at 320×200 and scales the whole frame up, which is
 what keeps the pixels chunky at any window size.

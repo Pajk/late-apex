@@ -8,26 +8,27 @@ speed  top speed, as a fraction of the reference car
 accel  how hard it pulls
 grip   steering authority; low grip means you must brake earlier
 mass   how well it shrugs off contact (higher loses less speed)
+engine which engine family it sounds like
 """
 
 CARS = [
-    dict(key='wedge', name='SCARAB V8', tag='SCB',
+    dict(engine='v8', key='wedge', name='SCARAB V8', tag='SCB',
          blurb='MID-ENGINED WEDGE - THE ALL ROUNDER',
          speed=1.00, accel=1.00, grip=1.00, mass=1.00,
          width=104, body=0.32, yield_traffic=False),
-    dict(key='gt', name='MERIDIAN GT', tag='MRD',
+    dict(engine='v12', key='gt', name='MERIDIAN GT', tag='MRD',
          blurb='BIG GRAND TOURER - FAST BUT LAZY',
          speed=1.07, accel=0.94, grip=0.90, mass=1.18,
          width=110, body=0.34, yield_traffic=False),
-    dict(key='coupe', name='BANTAM 16V', tag='BTM',
+    dict(engine='four', key='coupe', name='BANTAM 16V', tag='BTM',
          blurb='LIGHT AND EAGER - LIVES IN THE CORNERS',
          speed=0.95, accel=1.14, grip=1.16, mass=0.86,
          width=96, body=0.29, yield_traffic=False),
-    dict(key='ambulance', name='MEDIVAC 90', tag='MDV',
+    dict(engine='diesel', key='ambulance', name='MEDIVAC 90', tag='MDV',
          blurb='SIRENS ON - THE FIELD GETS OUT OF YOUR WAY',
          speed=0.96, accel=0.98, grip=0.95, mass=1.25,
          width=94, body=0.33, yield_traffic=True),
-    dict(key='van', name='TOURER 800', tag='TRR',
+    dict(engine='diesel', key='van', name='TOURER 800', tag='TRR',
          blurb='EIGHT SEATS OF DEFIANCE - HEAVY, SLOW, PROUD',
          speed=0.94, accel=0.92, grip=0.88, mass=1.45,
          width=96, body=0.33, yield_traffic=False),

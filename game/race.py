@@ -22,7 +22,11 @@ OFF_ROAD_DECEL = -MAX_SPEED / 1.6
 OFF_ROAD_LIMIT = MAX_SPEED / 3.6
 CENTRIFUGAL = 0.46
 KMH_PER_UNIT = 310.0 / MAX_SPEED
-GEARS = 5
+GEARS = 6
+# Speed at which each gear runs out, as a fraction of top speed. Real ratios
+# are close together low down and long at the top, which is what makes the
+# box sound busy off the line and relaxed flat out.
+GEAR_TOPS = (0.14, 0.28, 0.44, 0.61, 0.80, 1.00)
 PLAYER_W = 0.32       # car width in road half-widths
 RIVAL_W = 0.32        # rivals are the same width, and must look it
 TRUCK_W = 0.42
@@ -148,8 +152,10 @@ class Race:
         self.flash = 0.0
         self._puff_cache = {}
         self.revs = 0.16
+        self.gear = 1
         self._spawn_rivals()
         self._init_weather()
+        self.audio.set_engine(self.car.get('engine', 'v8'))
 
     # -- setup ----------------------------------------------------------
     def _sprite_size(self, name, body):
@@ -239,9 +245,14 @@ class Race:
         if self.state == self.STATE_COUNTDOWN:
             return 1, clamp(self.revs, 0.0, 1.0)
         r = clamp(self.player.speed / self.top_speed, 0.0, 1.0)
-        g = min(GEARS - 1, int(r * GEARS))
-        frac = r * GEARS - g
-        return g + 1, 0.22 + 0.78 * frac
+        lo = 0.0
+        for i, hi in enumerate(GEAR_TOPS):
+            if r <= hi or i == GEARS - 1:
+                span = hi - lo
+                frac = (r - lo) / span if span > 0 else 0.0
+                return i + 1, 0.20 + 0.80 * clamp(frac, 0.0, 1.0)
+            lo = hi
+        return GEARS, 1.0
 
     # -- simulation -----------------------------------------------------
     def update(self, dt, keys):
@@ -360,8 +371,13 @@ class Race:
 
         # ---- audio
         gear, rpm = self.gear_rpm()
+        if gear != self.gear:
+            self.audio.shift()
+            self.gear = gear
         self.audio.engine(rpm, 0.35 + 0.65 * speed_pct if keys['accel']
                           else 0.18 + 0.4 * speed_pct)
+        self.audio.roar(speed_pct ** 1.5)
+        self.audio.turbo(boosting, 0.6 + 0.4 * speed_pct)
         skid = (abs(p.steer) > 0.55 and speed_pct > 0.55 and
                 abs(seg.curve) > 1.5) or p.offroad or \
                (p.braking and speed_pct > 0.6)

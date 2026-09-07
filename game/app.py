@@ -825,6 +825,18 @@ class _SilentAudio:
     def skid(self, *a, **k):
         pass
 
+    def set_engine(self, *a, **k):
+        pass
+
+    def shift(self, *a, **k):
+        pass
+
+    def roar(self, *a, **k):
+        pass
+
+    def turbo(self, *a, **k):
+        pass
+
     def play_music(self, *a, **k):
         pass
 
