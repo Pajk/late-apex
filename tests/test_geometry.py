@@ -77,6 +77,28 @@ def run():
         c.check(track.length == len(track.segments) * SEGMENT_LENGTH,
                 '%s length does not match its segment count' % spec['name'])
 
+    # -- rivals must look the size they collide at ---------------------
+    from game.race import PLAYER_W, RIVAL_W
+    import random as _rnd
+    from game.render import Renderer as _R
+    from game.scores import Scores as _S
+    from game.race import Race as _Race
+    _renderer = _R(assets)
+    _race = _Race(T.load('country'), _renderer, harness.silent_audio(),
+                  _S(T.TRACK_SPECS), _rnd.Random(1))
+    rival = _race.cars[0]
+    sprite_w = assets.get(rival.sprite).get_width()
+    drawn = sprite_w * rival.size * OBJECT_SCALE / ROAD_WIDTH
+    c.near(drawn, RIVAL_W - 0.005, RIVAL_W + 0.005,
+           'rivals render %.3f road half-widths wide but collide at %.3f - '
+           'you would hit an invisible edge' % (drawn, RIVAL_W))
+    c.near(drawn, PLAYER_W * 0.9, PLAYER_W * 1.1,
+           'rivals are a different size from the player car (%.3f vs %.3f)'
+           % (drawn, PLAYER_W))
+    c.note('rivals draw %.3f wide, collide at %.3f, player is %.3f'
+           % (drawn, RIVAL_W, PLAYER_W))
+    _race.clear()
+
     # -- the HUD must not swallow the player's car ---------------------
     _check_car_clears_hud(c)
 

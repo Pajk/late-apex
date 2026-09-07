@@ -23,11 +23,12 @@ CENTRIFUGAL = 0.46
 KMH_PER_UNIT = 310.0 / MAX_SPEED
 GEARS = 5
 PLAYER_W = 0.32       # car width in road half-widths
+RIVAL_W = 0.32        # rivals are the same width, and must look it
 INK = (236, 240, 250)
 # HUD geometry on the 320x200 design grid. The player car is placed against
 # HUD_BOTTOM so the instrument panel cannot swallow its wheels.
 HUD_TOP = 24
-HUD_BOTTOM = 28
+HUD_BOTTOM = 16
 CAR_SINK = 4          # how far the car's bottom tucks behind the panel
 TURBO_TIME = 2.6
 TURBO_BOOST = 1.22
@@ -51,7 +52,7 @@ class Rival:
         self.speed = speed
         self.colour = colour
         self.lean = 1
-        self.size = 0.73
+        self.size = 0.97      # overwritten from the real sprite on spawn
         self.sprite = 'car_rival%d_1' % colour
         self.seg = None
         self.total = z
@@ -132,6 +133,10 @@ class Race:
     def _spawn_rivals(self):
         n = self.track.rivals
         total = len(self.track.segments)
+        # Derive the draw scale from the collision width and the actual sprite,
+        # so a rival can never render narrower than the box you hit.
+        sprite_w = self.r.assets.get('car_rival0_1').get_width()
+        size = RIVAL_W * ROAD_WIDTH / (sprite_w * OBJECT_SCALE)
         for i in range(n):
             z = (i + 1) * (self.track.length / (n + 1.0)) * 0.55 + 1500
             off = self.rng.choice([-0.62, -0.24, 0.24, 0.62]) \
@@ -139,6 +144,7 @@ class Race:
             speed = MAX_SPEED * self.rng.uniform(0.56, 0.80) \
                 * self.track.par_speed
             car = Rival(z % self.track.length, off, speed, i % 6)
+            car.size = size
             seg = self.track.segment_at(car.z)
             seg.cars.append(car)
             car.seg = seg
@@ -366,20 +372,21 @@ class Race:
             # sirens: rivals pull over well before the player arrives
             gap = (base - player_seg_i) % n
             if gap < 42 and overlap(self.player.x, self.car_body + 0.5,
-                                    car.offset, 0.32, 1.0):
+                                    car.offset, RIVAL_W, 1.0):
                 return -1.4 if self.player.x > car.offset else 1.4
         for i in range(1, look):
             seg = track.segments[(base + i) % n]
             if (base + i) % n == player_seg_i and \
                     car.speed > self.player.speed and \
-                    overlap(self.player.x, self.car_body, car.offset, 0.32,
+                    overlap(self.player.x, self.car_body, car.offset, RIVAL_W,
                             1.4):
                 return -0.9 if self.player.x > car.offset else 0.9
             for other in seg.cars:
                 if other is car:
                     continue
                 if car.speed > other.speed and \
-                        overlap(car.offset, 0.32, other.offset, 0.32, 1.3):
+                        overlap(car.offset, RIVAL_W, other.offset, RIVAL_W,
+                                1.3):
                     return -0.7 if other.offset > car.offset else 0.7
         # ease back toward the middle of the road
         if car.offset < -0.75:
@@ -405,7 +412,7 @@ class Race:
         for car in list(seg.cars):
             if p.speed <= car.speed:
                 continue
-            if overlap(p.x, self.car_body, car.offset, 0.32, 0.85):
+            if overlap(p.x, self.car_body, car.offset, RIVAL_W, 0.85):
                 keep = 0.72 + 0.14 * (self.car['mass'] - 1.0)
                 p.speed = max(car.speed * clamp(keep, 0.6, 0.95),
                               p.speed * 0.55)
@@ -585,90 +592,93 @@ class Race:
 
     # -- HUD ------------------------------------------------------------
     def draw_hud(self, s):
+        """Two thin strips: everything you glance at lives on the top bar, and
+        the bottom keeps a single line for the numbers you watch continuously."""
         p = self.player
-        panel = pygame.Surface((BASE_WIDTH, 24), pygame.SRCALPHA)
+        W, H = BASE_WIDTH, BASE_HEIGHT
+
+        panel = pygame.Surface((W, HUD_TOP), pygame.SRCALPHA)
         panel.fill((10, 10, 22, 172))
         s.blit(panel, (0, 0))
-        s.fill((198, 40, 60), (0, 24, BASE_WIDTH, 1))
+        s.fill((198, 40, 60), (0, HUD_TOP, W, 1))
 
-        pf.draw_text(s, 'LAP', 5, 3, (150, 156, 180), 1)
+        pf.draw_text(s, 'LAP', 4, 3, (150, 156, 180), 1)
         pf.draw_text(s, '%d/%d' % (min(p.lap + 1, self.track.laps),
-                                   self.track.laps), 5, 13, INK, 1)
-        pf.draw_text(s, 'POS', 40, 3, (150, 156, 180), 1)
+                                   self.track.laps), 4, 13, INK, 1)
+        pf.draw_text(s, 'POS', 36, 3, (150, 156, 180), 1)
         pf.draw_text(s, '%d/%d' % (self.position, self.track.rivals + 1),
-                     40, 13, INK, 1)
+                     36, 13, INK, 1)
 
-        # big countdown clock
+        # the countdown, the one number that decides the race
         t = self.time_left
         col = INK
         if t < 6:
             col = (255, 90, 90) if int(t * 4) % 2 == 0 else (255, 200, 60)
         elif self.flash > 0 and int(self.flash * 12) % 2 == 0:
             col = (140, 255, 150)
-        pf.draw_text(s, '%02d' % int(min(99, math.ceil(t))), BASE_WIDTH // 2, 2,
+        pf.draw_text(s, '%02d' % int(min(99, math.ceil(t))), W // 2, 2,
                      col, 3, center=True, shadow=(60, 10, 20))
 
-        pf.draw_text(s, 'LAP TIME', BASE_WIDTH - 5, 3, (150, 156, 180), 1,
+        pf.draw_text(s, 'TIME', 256, 3, (150, 156, 180), 1, right=True)
+        pf.draw_text(s, fmt(self.lap_time), 256, 13, (255, 236, 120), 1,
                      right=True)
-        pf.draw_text(s, fmt(self.lap_time), BASE_WIDTH - 5, 13, (255, 236, 120), 1,
+        s.fill((70, 74, 96), (262, 4, 1, HUD_TOP - 8))
+        pf.draw_text(s, 'BEST', W - 4, 3, (150, 156, 180), 1, right=True)
+        pf.draw_text(s, fmt(self.best_lap), W - 4, 13, (170, 210, 255), 1,
                      right=True)
 
-        # bottom instrument strip
-        bh = HUD_BOTTOM
-        base = pygame.Surface((BASE_WIDTH, bh), pygame.SRCALPHA)
+        # single-line instrument strip
+        top = H - HUD_BOTTOM
+        base = pygame.Surface((W, HUD_BOTTOM), pygame.SRCALPHA)
         base.fill((10, 10, 22, 172))
-        s.blit(base, (0, BASE_HEIGHT - bh))
-        s.fill((198, 40, 60), (0, BASE_HEIGHT - bh - 1, BASE_WIDTH, 1))
-        top = BASE_HEIGHT - bh
+        s.blit(base, (0, top))
+        s.fill((198, 40, 60), (0, top - 1, W, 1))
 
-        pf.draw_text(s, '%3d' % int(self.kmh), 4, top + 4, (255, 240, 140), 3,
+        pf.draw_text(s, '%3d' % int(self.kmh), 4, top + 1, (255, 240, 140), 2,
                      shadow=(60, 10, 20))
-        pf.draw_text(s, 'KM/H', 58, top + 17, (170, 176, 200), 1)
+        pf.draw_text(s, 'KM/H', 42, top + 5, (170, 176, 200), 1)
         gear, rpm = self.gear_rpm()
-        pf.draw_text(s, 'GEAR %d' % gear, 58, top + 5, (200, 206, 226), 1)
+        pf.draw_text(s, 'GEAR %d' % gear, 70, top + 5, (200, 206, 226), 1)
 
-        bx, by, bw = 96, top + 6, 42
-        s.fill((40, 40, 56), (bx, by, bw, 5))
+        bx, by, bw = 110, top + 5, 44
+        s.fill((40, 40, 56), (bx, by, bw, 6))
         n = int(rpm * bw)
         for i in range(n):
             c = (90, 220, 110) if i < bw * 0.62 else (
                 (255, 210, 70) if i < bw * 0.84 else (255, 70, 70))
-            s.fill(c, (bx + i, by, 1, 5))
+            s.fill(c, (bx + i, by, 1, 6))
         if p.turbo_left > 0:
-            pf.draw_text(s, 'BOOST', bx, by + 8, (255, 170, 60), 1)
+            pf.draw_text(s, 'BOOST', 160, top + 5, (255, 170, 60), 1)
 
-        pf.draw_text(s, 'BEST ' + fmt(self.best_lap), BASE_WIDTH - 5, top + 4,
-                     (170, 210, 255), 1, right=True)
         for i in range(3):
-            x = BASE_WIDTH - 11 - i * 9
+            x = W - 11 - i * 9
             on = i < p.turbo
             c = (255, 150, 40) if on else (58, 58, 74)
             if p.turbo_left > 0 and i == p.turbo and int(
                     p.turbo_left * 10) % 2 == 0:
                 c = (255, 240, 160)
-            s.fill(c, (x, top + 14, 7, 8))
-        pf.draw_text(s, 'TURBO', BASE_WIDTH - 41, top + 15, (170, 176, 200), 1,
+            s.fill(c, (x, top + 4, 7, 8))
+        pf.draw_text(s, 'TURBO', W - 32, top + 5, (170, 176, 200), 1,
                      right=True)
 
         # centre messages
         y = 76
         for text, ttl, colour, big in self.messages:
             if ttl > 0:
-                pf.draw_text(s, text, BASE_WIDTH // 2, y, colour, 2 if big else 1,
+                pf.draw_text(s, text, W // 2, y, colour, 2 if big else 1,
                              center=True, shadow=(20, 12, 30))
                 y += 20
 
         if self.state == self.STATE_COUNTDOWN and self.countdown > 0:
             n = int(math.ceil(self.countdown - 0.9))
             if n >= 1:
-                pf.draw_text(s, str(min(3, n)), BASE_WIDTH // 2, 56,
-                             (255, 236, 120), 6, center=True,
-                             shadow=(120, 20, 40))
+                pf.draw_text(s, str(min(3, n)), W // 2, 56, (255, 236, 120),
+                             6, center=True, shadow=(120, 20, 40))
 
         if p.offroad and self.state == self.STATE_RACING:
             if int(self.race_time * 6) % 2 == 0:
-                pf.draw_text(s, 'OFF ROAD', BASE_WIDTH // 2, BASE_HEIGHT - 42,
-                             (255, 120, 120), 1, center=True)
+                pf.draw_text(s, 'OFF ROAD', W // 2, H - 34, (255, 120, 120),
+                             1, center=True)
 
 
 def fmt(t):
