@@ -365,6 +365,90 @@ def gen_music():
          ('A4', 4), ('B4', 4), ('D5', 8)],
         lead_wave='pulse', lead_duty=0.5, arp_duty=0.25, seed=21,
         drums='drive', lead_gain=0.21))
+
+    # Night shift: dark and insistent
+    made.append(build_track(
+        'music_night', 138, 8,
+        [('G', 'm'), ('D#', 'M'), ('A#', 'M'), ('F', 'M'),
+         ('G', 'm'), ('C', 'm'), ('D#', 'M'), ('D', 'M')],
+        [('G4', 2), ('A#4', 2), ('D5', 4), ('C5', 4), ('A#4', 4),
+         ('G4', 2), ('F4', 2), ('G4', 4), ('D5', 8),
+         ('D#5', 4), ('D5', 2), ('C5', 2), ('A#4', 4), ('G4', 4),
+         ('C5', 4), ('A#4', 4), ('G4', 8)],
+        lead_wave='pulse', lead_duty=0.25, arp_duty=0.25, seed=31,
+        drums='drive', lead_gain=0.21))
+
+    # Sunstrip: bright, wide open
+    made.append(build_track(
+        'music_sunstrip', 144, 8,
+        [('F', 'M'), ('A#', 'M'), ('C', 'M'), ('F', 'M'),
+         ('D', 'm'), ('A#', 'M'), ('C', 'M'), ('C', 'M')],
+        [('A4', 2), ('C5', 2), ('F5', 4), ('E5', 4), ('D5', 4),
+         ('C5', 4), ('A4', 4), ('F4', 8),
+         ('A#4', 2), ('D5', 2), ('F5', 4), ('E5', 4), ('C5', 4),
+         ('D5', 4), ('E5', 4), ('F5', 8)],
+        lead_wave='pulse', lead_duty=0.5, arp_duty=0.5, seed=32,
+        drums='rock', lead_gain=0.20))
+
+    # Overpass: moody mid-tempo
+    made.append(build_track(
+        'music_overpass', 128, 8,
+        [('B', 'm'), ('G', 'M'), ('D', 'M'), ('A', 'M'),
+         ('B', 'm'), ('F#', 'm'), ('G', 'M'), ('A', 'M')],
+        [('B4', 4), ('D5', 4), ('F#5', 4), ('E5', 4),
+         ('D5', 4), ('B4', 4), ('A4', 8),
+         ('G4', 4), ('B4', 4), ('D5', 4), ('C#5', 4),
+         ('B4', 6), ('C#5', 2), ('D5', 8)],
+        lead_wave='tri', arp_duty=0.125, seed=33, drums='light',
+        pad=True, lead_gain=0.25))
+
+    # Redline: flat out
+    made.append(build_track(
+        'music_redline', 162, 8,
+        [('E', 'm'), ('C', 'M'), ('D', 'M'), ('E', 'm'),
+         ('A', 'm'), ('C', 'M'), ('D', 'M'), ('B', 'M')],
+        [('E5', 2), ('G5', 2), ('B5', 2), ('A5', 2), ('G5', 2), ('E5', 2),
+         ('D5', 4), ('E5', 4), ('-', 2),
+         ('C5', 2), ('E5', 2), ('G5', 4), ('F#5', 2), ('E5', 2), ('D5', 4),
+         ('B4', 2), ('D5', 2), ('E5', 8)],
+        lead_wave='pulse', lead_duty=0.25, arp_duty=0.125, seed=34,
+        drums='drive', lead_gain=0.22))
+
+    # Coastal: breezy
+    made.append(build_track(
+        'music_coastal', 122, 8,
+        [('A', 'M'), ('D', 'M'), ('E', 'M'), ('A', 'M'),
+         ('F#', 'm'), ('D', 'M'), ('E', 'M'), ('E', 'M')],
+        [('E5', 4), ('A5', 4), ('G#5', 4), ('F#5', 4),
+         ('E5', 4), ('C#5', 4), ('A4', 8),
+         ('D5', 4), ('F#5', 4), ('A5', 4), ('G#5', 4),
+         ('E5', 8), ('F#5', 8)],
+        lead_wave='pulse', lead_duty=0.5, arp_duty=0.5, seed=35,
+        drums='light', pad=True, lead_gain=0.21))
+
+    # Iron circuit: heavy minor
+    made.append(build_track(
+        'music_iron', 150, 8,
+        [('C', 'm'), ('G#', 'M'), ('A#', 'M'), ('C', 'm'),
+         ('F', 'm'), ('G#', 'M'), ('A#', 'M'), ('G', 'M')],
+        [('C5', 4), ('D#5', 4), ('G5', 4), ('F5', 4),
+         ('D#5', 4), ('C5', 4), ('A#4', 8),
+         ('G#4', 4), ('C5', 4), ('D#5', 4), ('D5', 4),
+         ('C5', 6), ('D5', 2), ('D#5', 8)],
+        lead_wave='saw', arp_duty=0.125, seed=36, drums='rock',
+        lead_gain=0.17))
+
+    # Last lap: triumphant
+    made.append(build_track(
+        'music_lastlap', 156, 8,
+        [('G', 'M'), ('C', 'M'), ('D', 'M'), ('G', 'M'),
+         ('E', 'm'), ('C', 'M'), ('D', 'M'), ('D', 'M')],
+        [('D5', 2), ('G5', 2), ('B5', 4), ('A5', 4), ('G5', 4),
+         ('D5', 4), ('B4', 4), ('G4', 8),
+         ('C5', 2), ('E5', 2), ('G5', 4), ('F#5', 4), ('D5', 4),
+         ('E5', 4), ('F#5', 4), ('G5', 8)],
+        lead_wave='pulse', lead_duty=0.5, arp_duty=0.25, seed=37,
+        drums='drive', lead_gain=0.21))
     return made
 
 
@@ -386,6 +470,11 @@ ENGINES = {
     'diesel': dict(firings=2, jitter=0.034, res=74, decay=62, noise=0.34,
                    drive=1.9, sub=0.30, base=32, span=0.132, bright=0.32,
                    clatter=1.10),
+    # a screaming V10 and a hard-revving bike twin
+    'v10': dict(firings=5, jitter=0.004, res=340, decay=190, noise=0.12,
+                drive=1.2, sub=0.04, base=74, span=0.160, bright=0.96),
+    'bike': dict(firings=2, jitter=0.010, res=290, decay=140, noise=0.18,
+                 drive=1.5, sub=0.05, base=66, span=0.170, bright=0.94),
 }
 
 

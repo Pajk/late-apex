@@ -8,6 +8,7 @@ speed  top speed, as a fraction of the reference car
 accel  how hard it pulls
 grip   steering authority; low grip means you must brake earlier
 mass   how well it shrugs off contact (higher loses less speed)
+turbos how many boosts you get in a race
 engine which engine family it sounds like
 """
 
@@ -32,6 +33,18 @@ CARS = [
          blurb='EIGHT SEATS OF DEFIANCE - HEAVY, SLOW, PROUD',
          speed=0.94, accel=0.92, grip=0.88, mass=1.45,
          width=96, body=0.33, yield_traffic=False),
+    dict(engine='v8', key='police', name='INTERCEPT 5', tag='INT',
+         blurb='PURSUIT SPEC - FOUR BOOSTS INSTEAD OF THREE',
+         speed=1.02, accel=1.06, grip=1.06, mass=1.20,
+         width=110, body=0.33, yield_traffic=False, turbos=4),
+    dict(engine='v10', key='f1', name='APEX GP', tag='GP1',
+         blurb='SINGLE SEATER - VICIOUSLY FAST, MADE OF GLASS',
+         speed=1.10, accel=1.26, grip=1.30, mass=0.50,
+         width=116, body=0.30, yield_traffic=False),
+    dict(engine='bike', key='bike', name='HORNET 900', tag='HNT',
+         blurb='HALF THE WIDTH - GAPS OTHERS CANNOT TAKE',
+         speed=1.02, accel=1.34, grip=1.22, mass=0.42,
+         width=52, body=0.17, yield_traffic=False),
 ]
 
 BY_KEY = {c['key']: c for c in CARS}
@@ -45,8 +58,8 @@ def get(key):
 def stat_bars(car):
     """(label, 0..1) rows for the selection screen."""
     return [
-        ('SPEED', (car['speed'] - 0.88) / 0.24),
-        ('ACCEL', (car['accel'] - 0.85) / 0.34),
-        ('GRIP', (car['grip'] - 0.84) / 0.36),
-        ('BULK', (car['mass'] - 0.80) / 0.72),
+        ('SPEED', (car['speed'] - 0.88) / 0.26),
+        ('ACCEL', (car['accel'] - 0.85) / 0.52),
+        ('GRIP', (car['grip'] - 0.82) / 0.52),
+        ('BULK', (car['mass'] - 0.40) / 1.05),
     ]

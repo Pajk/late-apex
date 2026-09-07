@@ -11,6 +11,7 @@ from . import pixelfont as pf
 from . import autopilot
 from . import cars as garage
 from . import difficulty as levels
+from . import music
 from . import track as tracks
 from .audio import Audio
 from .race import Race, fmt, MAX_SPEED
@@ -59,6 +60,7 @@ class App:
         self.scores = Scores(tracks.TRACK_SPECS)
         self.clock = pygame.time.Clock()
         self.rng = random.Random()
+        self.jukebox = music.Jukebox(self.rng)
 
         self.track_cache = {}
         self.sel = 0
@@ -85,7 +87,7 @@ class App:
         self.race_end_timer = 0.0
 
         self.start_demo()
-        self.audio.play_music('music_menu')
+        self.audio.play_music(music.MENU)
 
     # -- helpers --------------------------------------------------------
     def get_track(self, key):
@@ -373,7 +375,9 @@ class App:
         self.race = Race(t, self.renderer, self.audio, self.scores, self.rng,
                          car=garage.CARS[self.car_sel],
                          level=levels.LEVELS[self.diff_sel])
-        self.audio.play_music(t.theme['music'])
+        tune, title = self.jukebox.next()
+        self.race.tune = title
+        self.audio.play_music(tune)
         self.result = None
 
     def abandon_race(self):
@@ -381,7 +385,7 @@ class App:
             self.race.clear()
             self.race = None
         self.audio.quiet()
-        self.audio.play_music('music_menu')
+        self.audio.play_music(music.MENU)
         if self.demo is None:
             self.start_demo()
 

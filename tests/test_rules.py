@@ -258,4 +258,42 @@ def run():
             'speed left)' % (100 * head_on_left))
     c.note('head-on leaves %.0f%% of top speed' % (100 * head_on_left))
 
+    # -- the jukebox plays everything before repeating ------------------
+    from game import music
+    import random as _r
+    box = music.Jukebox(_r.Random(4))
+    seen = [box.next()[0] for _ in range(len(music.RACE))]
+    c.check(len(set(seen)) == len(music.RACE),
+            'the jukebox repeated a tune before playing them all (%d unique '
+            'of %d)' % (len(set(seen)), len(music.RACE)))
+    c.check(len(music.RACE) >= 10,
+            'only %d race tunes; the pool is meant to be at least ten'
+            % len(music.RACE))
+    import os
+    missing = [f for f, _ in music.RACE + [(music.MENU, '')]
+               if not os.path.exists(os.path.join(harness.ROOT, 'assets',
+                                                  'audio', f + '.wav'))]
+    c.check(not missing, 'jukebox refers to missing files: %s' % missing)
+    c.note('%d race tunes, all present, shuffled without repeats'
+           % len(music.RACE))
+
+    # -- every car has art and an engine to match ----------------------
+    from game.render import Assets
+    from game import cars as garage2
+    _assets = Assets(harness.ROOT)
+    for car in garage2.CARS:
+        for lean in range(5):
+            for tag in 'nb':
+                name = 'car_%s_%d%s' % (car['key'], lean, tag)
+                c.check(name in _assets.raw,
+                        '%s is missing sprite %s' % (car['name'], name))
+        bank = [f for f in os.listdir(os.path.join(harness.ROOT, 'assets',
+                                                   'audio'))
+                if f.startswith('engine_%s_' % car['engine'])]
+        c.check(len(bank) == 16,
+                '%s wants a %s engine but the bank has %d loops'
+                % (car['name'], car['engine'], len(bank)))
+    c.note('%d cars, all with 10 frames and a full engine bank'
+           % len(garage2.CARS))
+
     return c.report()

@@ -6,7 +6,7 @@ import os
 import pygame
 
 ENGINE_STEPS = 16
-FAMILIES = ('v8', 'v12', 'four', 'diesel')
+FAMILIES = ('v8', 'v12', 'four', 'diesel', 'v10', 'bike')
 
 
 class Audio:

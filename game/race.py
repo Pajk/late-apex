@@ -88,7 +88,7 @@ class Player:
         self.steer = 0.0          # -1..1 smoothed input
         self.slide = 0.0
         self.bounce = 0.0
-        self.turbo = 3
+        self.turbo = 3        # replaced from the car on spawn
         self.turbo_left = 0.0
         self.braking = False
         self.offroad = False
@@ -134,6 +134,7 @@ class Race:
         self.rng = rng or random.Random()
         self.colors = renderer.colors_for(track.theme)
         self.player = Player()
+        self.player.turbo = self.car.get('turbos', 3)
         self.cars = []
         self.traffic = []
         self.rival_count = track.rivals
@@ -157,6 +158,7 @@ class Race:
         self.flash = 0.0
         self._puff_cache = {}
         self.revs = 0.16
+        self.tune = ''
         self.gear = 1
         self._spawn_rivals()
         self._init_weather()
@@ -767,6 +769,12 @@ class Race:
             s.fill(c, (x, top + 4, 7, 8))
         pf.draw_text(s, 'TURBO', W - 32, top + 5, (170, 176, 200), 1,
                      right=True)
+
+        # now playing, for the first few seconds of a race
+        if self.tune and self.race_time < 7.0:
+            fade = min(1.0, (7.0 - self.race_time) * 1.5)
+            col = (int(150 * fade), int(190 * fade), int(240 * fade))
+            pf.draw_text(s, self.tune, 4, H - HUD_BOTTOM - 10, col, 1)
 
         # centre messages
         y = 76

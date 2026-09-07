@@ -16,6 +16,10 @@ LANES = 3
 
 LENGTHS = {'short': 16, 'medium': 30, 'long': 56, 'xlong': 88}
 CURVES = {'easy': 2.0, 'medium': 4.0, 'hard': 6.5, 'vhard': 9.0}
+# Crest heights. HILL_SCALE turns them into world units: at 1.0 the whole of
+# Alpine Crest rose by less than two metres, which is invisible from the
+# cockpit. Real mountain roads run at 6-10% gradient.
+HILL_SCALE = 6.0
 HILLS = {'low': 20, 'medium': 45, 'high': 75, 'huge': 110}
 
 
@@ -67,7 +71,6 @@ THEMES = {
     'city': {
         'title': 'NEON CITY',
         'blurb': 'DUSK IN THE DOWNTOWN GRID',
-        'music': 'music_city',
         'bg': 'city',
         'fog_color': (26, 22, 46),
         'fog_density': 4.2,
@@ -94,7 +97,6 @@ THEMES = {
     'country': {
         'title': 'GREEN VALLEY',
         'blurb': 'ROLLING HILLS AND LONG STRAIGHTS',
-        'music': 'music_country',
         'bg': 'country',
         'fog_color': (176, 208, 226),
         'fog_density': 3.0,
@@ -118,7 +120,6 @@ THEMES = {
     'desert': {
         'title': 'DUST HIGHWAY',
         'blurb': 'FLAT OUT ACROSS THE BADLANDS',
-        'music': 'music_desert',
         'bg': 'desert',
         'fog_color': (238, 208, 158),
         'fog_density': 2.4,
@@ -143,7 +144,6 @@ THEMES = {
     'winter': {
         'title': 'FROST PASS',
         'blurb': 'ICE, SNOW AND NO ROOM FOR ERROR',
-        'music': 'music_winter',
         'bg': 'winter',
         'fog_color': (216, 226, 240),
         'fog_density': 5.0,
@@ -167,7 +167,6 @@ THEMES = {
     'summer': {
         'title': 'ALPINE CREST',
         'blurb': 'HIGH PEAKS AND HUGE CRESTS',
-        'music': 'music_summer',
         'bg': 'summer',
         'fog_color': (150, 196, 240),
         'fog_density': 3.4,
@@ -220,7 +219,7 @@ class Track:
 
     def road(self, enter, hold, leave, curve=0.0, hill=0.0):
         start_y = self._last_y
-        end_y = start_y + hill * SEGMENT_LENGTH / 200.0 * 2.0
+        end_y = start_y + hill * SEGMENT_LENGTH / 200.0 * 2.0 * HILL_SCALE
         total = enter + hold + leave
         for n in range(enter):
             self._add(ease_in(0, curve, n / enter),
@@ -262,8 +261,16 @@ class Track:
             self.road(10, 10, 10, 0, h)
 
     def _close_loop(self):
-        """Flatten the last stretch back to y=0 so the lap joins seamlessly."""
-        tail = min(120, len(self.segments))
+        """Flatten the last stretch back to y=0 so the lap joins seamlessly.
+
+        The run-out is as long as the drop needs: a fixed length turned the
+        closure into the steepest ramp on the circuit once the hills were
+        scaled up.
+        """
+        drop = abs(self._last_y)
+        needed = int(drop / (SEGMENT_LENGTH * 0.035)) + 1
+        tail = min(max(120, needed), int(len(self.segments) * 0.4))
+        tail = min(tail, len(self.segments))
         start = len(self.segments) - tail
         y0 = self.segments[start].p1.wy
         for k in range(tail):
@@ -326,7 +333,8 @@ class Track:
 
 def _build_city(t):
     t.straight('short')
-    t.curve('medium', 'medium')
+    t.curve('medium', 'medium', 10)
+    t.hill('short', 'low')
     t.straight('medium')
     t.curve('short', 'hard')
     t.curve('short', -CURVES['hard'])
@@ -343,7 +351,8 @@ def _build_city(t):
     t.curve('short', -CURVES['hard'])
     t.straight('long')
     t.curve('medium', 'hard')
-    t.curve('medium', -CURVES['medium'], -12)
+    t.curve('medium', -CURVES['medium'], -18)
+    t.hill('short', 'medium')
     t.straight('medium')
 
 
@@ -369,8 +378,9 @@ def _build_country(t):
 
 def _build_desert(t):
     t.straight('xlong')
-    t.curve('long', 'easy')
-    t.straight('xlong')
+    t.curve('long', 'easy', 14)
+    t.hill('long', 'medium')
+    t.straight('long')
     t.curve('long', -CURVES['easy'], 12)
     t.straight('long')
     t.curve('medium', 'medium')
@@ -381,8 +391,9 @@ def _build_desert(t):
     t.straight('xlong')
     t.curve('long', 'easy', 16)
     t.straight('long')
-    t.curve('medium', -CURVES['hard'])
-    t.straight('xlong')
+    t.curve('medium', -CURVES['hard'], -20)
+    t.hill('medium', 'low')
+    t.straight('long')
 
 
 def _build_winter(t):
@@ -430,19 +441,19 @@ def _build_summer(t):
 
 TRACK_SPECS = [
     dict(key='country', name='GREEN VALLEY', theme='country',
-         build=_build_country, start_time=60, lap_bonus=43, rivals=8,
+         build=_build_country, start_time=61, lap_bonus=44, rivals=8,
          seed=101, par_speed=1.00),
     dict(key='city', name='NEON CITY', theme='city',
-         build=_build_city, start_time=46, lap_bonus=34, rivals=9,
+         build=_build_city, start_time=49, lap_bonus=36, rivals=9,
          seed=202, par_speed=0.98),
     dict(key='desert', name='DUST HIGHWAY', theme='desert',
-         build=_build_desert, start_time=68, lap_bonus=48, rivals=8,
+         build=_build_desert, start_time=73, lap_bonus=51, rivals=8,
          seed=303, par_speed=1.04),
     dict(key='summer', name='ALPINE CREST', theme='summer',
-         build=_build_summer, start_time=52, lap_bonus=39, rivals=8,
+         build=_build_summer, start_time=53, lap_bonus=40, rivals=8,
          seed=404, par_speed=0.99),
     dict(key='winter', name='FROST PASS', theme='winter',
-         build=_build_winter, start_time=48, lap_bonus=35, rivals=7,
+         build=_build_winter, start_time=49, lap_bonus=36, rivals=7,
          seed=505, par_speed=0.93),
 ]
 

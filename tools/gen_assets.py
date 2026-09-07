@@ -407,6 +407,138 @@ def draw_oncoming(body, w=112, h=64, lean=0, truck=False):
     return s
 
 
+def draw_police(body, w=124, h=72, lean=0, braking=False):
+    """Interceptor saloon: two-tone with a roof light bar."""
+    s = draw_gt((236, 238, 244), w=w, h=h, lean=lean, braking=braking)
+    cx = w / 2
+    lo = lean * 3.0
+    ground = h - 3
+    # dark lower flanks
+    rect(s, (26, 28, 38), cx - w * 0.47, ground - 20, w * 0.94, 8)
+    rect(s, (26, 28, 38), cx - w * 0.47, ground - 6, w * 0.20, 5)
+    rect(s, (26, 28, 38), cx + w * 0.27, ground - 6, w * 0.20, 5)
+    # light bar
+    bar_y = ground - 62
+    rect(s, (48, 50, 62), cx - w * 0.26 + lo, bar_y, w * 0.52, 8)
+    for i, col in enumerate([(70, 130, 255), (255, 70, 70)] * 2):
+        rect(s, col, cx - w * 0.24 + lo + i * w * 0.12, bar_y + 1,
+             w * 0.10, 6)
+    rect(s, (200, 204, 214), cx - w * 0.10, ground - 16, w * 0.20, 5)
+    return s
+
+
+def draw_f1(body, w=132, h=64, lean=0, braking=False):
+    """Open-wheel single seater: exposed tyres, big rear wing, airbox."""
+    s = surf(w, h)
+    cx = w / 2
+    lo = lean * 2.2
+    tilt = lean * 1.2
+    dark, darker = shade(body, 0.6), shade(body, 0.36)
+    ground = h - 3
+
+    # rear tyres, wide and proud of the body
+    for side in (-1, 1):
+        wx = cx + side * w * 0.36 - 15
+        wy = ground - 28 + side * tilt * 0.5
+        pygame.draw.ellipse(s, (24, 24, 30), (wx, wy, 30, 12))
+        rect(s, (24, 24, 30), wx, wy + 6, 30, 22)
+        rect(s, (46, 46, 56), wx + 2, wy + 7, 26, 3)
+        rect(s, (140, 142, 156), wx + 9, wy + 14, 12, 11)
+        rect(s, (84, 86, 98), wx + 9, wy + 20, 12, 5)
+    rect(s, (0, 0, 0, 120), cx - w * 0.42, ground - 2, w * 0.84, 4)
+
+    # sidepods and the body pod between the wheels
+    for side in (-1, 1):
+        poly(s, shade(body, 0.9),
+             [(cx + side * w * 0.14, ground - 10 + tilt),
+              (cx + side * w * 0.26, ground - 10 + tilt),
+              (cx + side * w * 0.24, ground - 24),
+              (cx + side * w * 0.13, ground - 26)])
+    poly(s, body, [(cx - w * 0.16, ground - 6 + tilt),
+                   (cx + w * 0.16, ground - 6 - tilt),
+                   (cx + w * 0.13, ground - 30 - tilt),
+                   (cx - w * 0.13, ground - 30 + tilt)])
+    rect(s, darker, cx - w * 0.16, ground - 12, w * 0.32, 7)
+    for i in range(5):
+        rect(s, (18, 18, 24), cx - w * 0.14 + i * w * 0.06, ground - 11,
+             w * 0.02, 5)
+    # engine cover and airbox over the driver
+    poly(s, dark, [(cx - w * 0.10 + lo, ground - 30 + tilt),
+                   (cx + w * 0.10 + lo, ground - 30 - tilt),
+                   (cx + w * 0.06 + lo, ground - 46),
+                   (cx - w * 0.06 + lo, ground - 46)])
+    rect(s, (30, 32, 44), cx - w * 0.05 + lo, ground - 52, w * 0.10, 8)
+    pygame.draw.circle(s, (240, 200, 60),
+                       (int(cx + lo), int(ground - 48)), 5)
+    # rear wing on end plates
+    wing_y = ground - 58
+    poly(s, shade(body, 0.85), [(cx - w * 0.40, wing_y + 7 + tilt),
+                                (cx + w * 0.40, wing_y + 7 - tilt),
+                                (cx + w * 0.40, wing_y - tilt),
+                                (cx - w * 0.40, wing_y + tilt)])
+    poly(s, shade(body, 1.25), [(cx - w * 0.40, wing_y + 2 + tilt),
+                                (cx + w * 0.40, wing_y + 2 - tilt),
+                                (cx + w * 0.40, wing_y - tilt),
+                                (cx - w * 0.40, wing_y + tilt)])
+    for side in (-1, 1):
+        rect(s, darker, cx + side * w * 0.40 - 3, wing_y - 2, 5, 14)
+    lamp = (255, 70, 50) if not braking else (255, 220, 190)
+    rect(s, lamp, cx - 5, ground - 26, 10, 7)
+    return s
+
+
+def draw_bike(body, w=68, h=78, lean=0, braking=False):
+    """Motorcycle and rider from behind - narrow enough to change the game."""
+    s = surf(w, h)
+    cx = w / 2
+    tilt = lean * 4.5            # bikes lean properly
+    lo = lean * 3.0
+    ground = h - 3
+    dark, light = shade(body, 0.55), shade(body, 1.2)
+
+    rect(s, (0, 0, 0, 120), cx - 11, ground - 2, 22, 4)
+    # rear tyre and swingarm
+    rect(s, (22, 22, 28), cx - 8 + tilt * 0.4, ground - 26, 16, 26)
+    rect(s, (48, 48, 58), cx - 6 + tilt * 0.4, ground - 22, 12, 4)
+    rect(s, (150, 152, 165), cx - 3 + tilt * 0.4, ground - 16, 6, 8)
+    for side in (-1, 1):
+        rect(s, (70, 72, 84), cx + side * 11 + tilt * 0.4 - 2, ground - 20,
+             4, 12)
+    # exhaust cans
+    for side in (-1, 1):
+        rect(s, (168, 170, 182), cx + side * 15 + tilt * 0.5 - 4,
+             ground - 24, 8, 9)
+        rect(s, (96, 98, 110), cx + side * 15 + tilt * 0.5 - 3,
+             ground - 22, 6, 4)
+    # tail unit and seat
+    poly(s, body, [(cx - 11 + tilt, ground - 24), (cx + 11 + tilt, ground - 24),
+                   (cx + 8 + lo, ground - 42), (cx - 8 + lo, ground - 42)])
+    poly(s, light, [(cx - 10 + tilt, ground - 30), (cx + 10 + tilt, ground - 30),
+                    (cx + 9 + tilt, ground - 26), (cx - 9 + tilt, ground - 26)])
+    lamp = (255, 70, 50) if not braking else (255, 220, 190)
+    rect(s, shade(lamp, 0.5), cx - 7 + tilt, ground - 36, 14, 8)
+    rect(s, lamp, cx - 6 + tilt, ground - 35, 12, 6)
+    poly(s, dark, [(cx - 8 + lo, ground - 42), (cx + 8 + lo, ground - 42),
+                   (cx + 7 + lo, ground - 48), (cx - 7 + lo, ground - 48)])
+    # rider: hunched back, elbows out, helmet
+    poly(s, (40, 44, 64), [(cx - 10 + lo, ground - 44),
+                           (cx + 10 + lo, ground - 44),
+                           (cx + 9 + lo, ground - 60),
+                           (cx - 9 + lo, ground - 60)])
+    rect(s, body, cx - 10 + lo, ground - 52, 20, 4)
+    poly(s, (54, 60, 84), [(cx - 9 + lo, ground - 60),
+                           (cx + 9 + lo, ground - 60),
+                           (cx + 7 + lo, ground - 65),
+                           (cx - 7 + lo, ground - 65)])
+    for side in (-1, 1):
+        rect(s, (40, 44, 64), cx + side * 11 + lo - 3, ground - 58, 6, 11)
+        rect(s, (24, 26, 38), cx + side * 12 + lo - 3, ground - 50, 6, 5)
+    pygame.draw.circle(s, (232, 234, 242), (int(cx + lo), int(ground - 70)), 8)
+    pygame.draw.circle(s, (36, 42, 62), (int(cx + lo), int(ground - 72)), 6)
+    rect(s, body, cx - 7 + lo, ground - 77, 14, 5)
+    return s
+
+
 def gen_cars():
     """Ten frames per playable car (five steering angles x brake lights) plus
     the rival field."""
@@ -417,13 +549,17 @@ def gen_cars():
         'coupe': lambda **kw: draw_coupe((248, 196, 32), **kw),
         'ambulance': lambda **kw: draw_van(None, ambulance=True, **kw),
         'van': lambda **kw: draw_van((72, 148, 108), **kw),
+        'police': lambda **kw: draw_police(None, **kw),
+        'f1': lambda **kw: draw_f1((28, 34, 58), **kw),
+        'bike': lambda **kw: draw_bike((228, 96, 32), **kw),
     }
     for key, build in builders.items():
         for lean in (-2, -1, 0, 1, 2):
             for braking in (False, True):
                 tag = 'b' if braking else 'n'
                 # the taller bodies lean harder but steer through fewer angles
-                amount = lean if key in ('wedge', 'gt', 'coupe') else \
+                amount = lean if key in ('wedge', 'gt', 'coupe', 'police',
+                                         'f1', 'bike') else \
                     max(-1, min(1, lean))
                 img = build(lean=amount, braking=braking)
                 names.append(save(img, 'car_%s_%d%s' % (key, lean + 2, tag)))
