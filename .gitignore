@@ -1,0 +1,18 @@
+# virtualenv
+.venv/
+
+# build output
+build/
+dist/
+*.egg-info/
+Late Apex.app/
+
+# python
+__pycache__/
+*.pyc
+
+# test artefacts
+tests/output/
+
+# macOS
+.DS_Store
