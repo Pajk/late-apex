@@ -7,8 +7,8 @@ from tests import harness
 def run():
     c = harness.Checks('ui flow')
     import pygame
-    from game.app import (App, S_TITLE, S_SELECT, S_CAR, S_RACE, S_PAUSE,
-                          S_RESULT, S_NAME, S_SCORES, S_HELP)
+    from game.app import (App, S_TITLE, S_SELECT, S_DIFF, S_CAR, S_RACE,
+                          S_PAUSE, S_RESULT, S_NAME, S_SCORES, S_HELP)
     from game.race import Race, MAX_SPEED
 
     app = App(harness.ROOT)
@@ -58,6 +58,18 @@ def run():
 
     press(pygame.K_RETURN)
     step(40)
+    c.check(app.state == S_DIFF, 'enter did not open difficulty select')
+    grab()
+    from game import difficulty as levels
+    before_diff = app.diff_sel
+    press(pygame.K_DOWN)
+    step(5)
+    c.check(app.diff_sel != before_diff, 'difficulty selection did not move')
+    press(pygame.K_UP)
+    step(5)
+
+    press(pygame.K_RETURN)
+    step(40)
     c.check(app.state == S_CAR, 'enter did not open the garage')
     grab()
     from game import cars as garage
@@ -73,6 +85,8 @@ def run():
     c.check(app.state == S_RACE, 'enter did not start a race')
     c.check(app.race.car is garage.CARS[app.car_sel],
             'the race did not use the chosen car')
+    c.check(app.race.level is levels.LEVELS[app.diff_sel],
+            'the race did not use the chosen difficulty')
     c.check(app.race is not None and app.demo is None,
             'demo was not torn down when the race began')
     c.check(app.race.state == Race.STATE_COUNTDOWN,
@@ -133,7 +147,7 @@ def run():
     c.check(app.state == S_SCORES, 'confirming initials did not show the table')
     grab()
 
-    table = app.scores.table(app.result['key'], 'race')
+    table = app.scores.table(app.result['key'], 'race', app.result['level'])
     mine = [r for r in table if r['name'] == 'PAV']
     c.check(mine and mine[0].get('car') == app.result['car'],
             'the score did not record which car set it')
@@ -146,8 +160,15 @@ def run():
     reloaded = type(app.scores)(__import__('game.track', fromlist=['x'])
                                 .TRACK_SPECS)
     c.check(any(r['name'] == 'PAV'
-                for r in reloaded.table(app.result['key'], 'race')),
+                for r in reloaded.table(app.result['key'], 'race',
+                                        app.result['level'])),
             'the score did not survive a reload from disk')
+    other = [lv['key'] for lv in levels.LEVELS
+             if lv['key'] != app.result['level']][0]
+    c.check(not any(r['name'] == 'PAV'
+                    for r in app.scores.table(app.result['key'], 'race',
+                                              other)),
+            'the score leaked into another difficulty table')
 
     out = harness.contact_sheet(frames, 'screens.png', cols=3)
     c.note('walked %d screens, wrote %s' % (len(frames), out))

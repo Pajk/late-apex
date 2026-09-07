@@ -5,6 +5,7 @@ and the screenshot/GIF capture tool. Keeping one implementation means the
 demo drives as well as the thing the tests measure.
 """
 
+from . import difficulty as diff
 from .race import MAX_SPEED, CENTRIFUGAL
 
 
@@ -32,9 +33,19 @@ def drive(race, skill=0.85):
     look = 600 + 2600 * skill
     limit, _ = corner_limit(track, player.z, look)
     limit = min(1.0, limit) * (0.72 + 0.26 * skill)
+    limit /= race.level['centrifugal'] ** 0.5
 
     here = track.segment_at(player.z).curve
-    target = max(-0.75, min(0.75, -here * 0.10))
+    mine, oncoming = diff.lanes_for(race.level)
+    target = -here * 0.10
+    if oncoming:
+        # Keep to the middle of our own side. Hugging the outer lane leaves
+        # no room for the car to be pushed wide in a corner.
+        centre = sum(mine) / len(mine)
+        target = centre + max(-0.2, min(0.2, target))
+        target = max(min(mine), min(max(mine), target))
+    else:
+        target = max(-0.75, min(0.75, target))
     error = target - player.x
     ratio = player.speed / MAX_SPEED
     return {'left': error < -0.03, 'right': error > 0.03,

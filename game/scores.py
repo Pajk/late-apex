@@ -1,7 +1,13 @@
-"""Old-school 3-character high score tables, saved between sessions."""
+"""Old-school 3-character high score tables, saved between sessions.
+
+Tables are kept per circuit *and* per difficulty: a time set on easy is not
+comparable with one set dodging oncoming traffic on hard.
+"""
 
 import json
 import os
+
+from . import difficulty as diff
 
 TABLE_SIZE = 8
 NAME_LEN = 3
@@ -42,18 +48,22 @@ class Scores:
     def _seed(self, tracks):
         for spec in tracks:
             k = spec['key']
-            par_race = (spec['start_time'] + spec['lap_bonus'] * 2) * 0.97
-            par_lap = par_race / 3.0
-            self.data[k] = {
-                'race': [{'name': _SEED_NAMES[i % len(_SEED_NAMES)],
-                          'time': round(par_race * (1.0 + 0.05 * i), 2),
-                          'car': _SEED_CARS[i % len(_SEED_CARS)]}
-                         for i in range(TABLE_SIZE)],
-                'lap': [{'name': _SEED_NAMES[(i + 3) % len(_SEED_NAMES)],
-                         'time': round(par_lap * (1.0 + 0.05 * i), 2),
-                         'car': _SEED_CARS[(i + 2) % len(_SEED_CARS)]}
-                        for i in range(TABLE_SIZE)],
-            }
+            self.data[k] = {}
+            for level in diff.LEVELS:
+                budget = (spec['start_time'] + spec['lap_bonus'] * 2) \
+                    * level['time']
+                par_race = budget * 0.97
+                par_lap = par_race / 3.0
+                self.data[k][level['key']] = {
+                    'race': [{'name': _SEED_NAMES[i % len(_SEED_NAMES)],
+                              'time': round(par_race * (1.0 + 0.05 * i), 2),
+                              'car': _SEED_CARS[i % len(_SEED_CARS)]}
+                             for i in range(TABLE_SIZE)],
+                    'lap': [{'name': _SEED_NAMES[(i + 3) % len(_SEED_NAMES)],
+                             'time': round(par_lap * (1.0 + 0.05 * i), 2),
+                             'car': _SEED_CARS[(i + 2) % len(_SEED_CARS)]}
+                            for i in range(TABLE_SIZE)],
+                }
 
     def load(self):
         try:
@@ -64,24 +74,32 @@ class Scores:
         for k, v in raw.items():
             if k not in self.data or not isinstance(v, dict):
                 continue
-            for kind in ('race', 'lap'):
-                rows = v.get(kind)
-                if not isinstance(rows, list):
+            # Files written before difficulty existed hold the tables directly
+            # under the circuit; those times were all set on easy.
+            if 'race' in v or 'lap' in v:
+                v = {'easy': v}
+            for level_key, tables in v.items():
+                if level_key not in self.data[k] or \
+                        not isinstance(tables, dict):
                     continue
-                clean = []
-                for r in rows:
-                    try:
-                        name = str(r['name'])[:NAME_LEN].upper() or '---'
-                        t = float(r['time'])
-                    except (KeyError, TypeError, ValueError):
+                for kind in ('race', 'lap'):
+                    rows = tables.get(kind)
+                    if not isinstance(rows, list):
                         continue
-                    row = {'name': name, 'time': t}
-                    if r.get('car'):
-                        row['car'] = str(r['car'])[:3].upper()
-                    clean.append(row)
-                if clean:
-                    clean.sort(key=lambda r: r['time'])
-                    self.data[k][kind] = clean[:TABLE_SIZE]
+                    clean = []
+                    for r in rows:
+                        try:
+                            name = str(r['name'])[:NAME_LEN].upper() or '---'
+                            t = float(r['time'])
+                        except (KeyError, TypeError, ValueError):
+                            continue
+                        row = {'name': name, 'time': t}
+                        if r.get('car'):
+                            row['car'] = str(r['car'])[:3].upper()
+                        clean.append(row)
+                    if clean:
+                        clean.sort(key=lambda r: r['time'])
+                        self.data[k][level_key][kind] = clean[:TABLE_SIZE]
 
     def save(self):
         try:
@@ -91,26 +109,26 @@ class Scores:
             pass
 
     # -- queries --------------------------------------------------------
-    def table(self, track_key, kind):
-        return self.data[track_key][kind]
+    def table(self, track_key, kind, level='easy'):
+        return self.data[track_key][level][kind]
 
-    def best(self, track_key, kind):
-        rows = self.data[track_key][kind]
+    def best(self, track_key, kind, level='easy'):
+        rows = self.data[track_key][level][kind]
         return rows[0]['time'] if rows else None
 
-    def position(self, track_key, kind, time):
+    def position(self, track_key, kind, time, level='easy'):
         """1-based place this time would take, or None if it misses the table."""
-        rows = self.data[track_key][kind]
+        rows = self.data[track_key][level][kind]
         for i, r in enumerate(rows):
             if time < r['time']:
                 return i + 1
         return len(rows) + 1 if len(rows) < TABLE_SIZE else None
 
-    def insert(self, track_key, kind, name, time, car=None):
-        pos = self.position(track_key, kind, time)
+    def insert(self, track_key, kind, name, time, car=None, level='easy'):
+        pos = self.position(track_key, kind, time, level)
         if pos is None:
             return None
-        rows = self.data[track_key][kind]
+        rows = self.data[track_key][level][kind]
         row = {'name': name[:NAME_LEN].upper(), 'time': time}
         if car:
             row['car'] = str(car)[:3].upper()

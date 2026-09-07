@@ -61,36 +61,43 @@ def run():
         c.note('%-14s budget %3ds | %s' % (
             spec['name'], budget, '  '.join(show(l) for _, l in SKILLS)))
 
-    # every car has to be able to finish every circuit, or the slow ones are
-    # a trap rather than a choice
+    # every car has to be able to finish every circuit at every difficulty,
+    # or the slow ones are a trap rather than a choice
     from game import cars as garage
+    from game import difficulty as levels
     slowest = {}
-    for car in garage.CARS:
+    for level in levels.LEVELS:
+      for car in garage.CARS:
         for spec in T.TRACK_SPECS:
             track = T.load(spec['key'])
             race = Race(track, renderer, harness.silent_audio(), scores,
-                        random.Random(9), car=car)
+                        random.Random(9), car=car, level=level)
             elapsed = 0.0
             while race.state in (Race.STATE_COUNTDOWN,
                                  Race.STATE_RACING) and elapsed < 400:
                 race.update(1 / 60.0, autopilot.drive(race, 0.95))
                 elapsed += 1 / 60.0
-            budget = spec['start_time'] + spec['lap_bonus'] * 2
+            budget = (spec['start_time'] + spec['lap_bonus'] * 2) \
+                * level['time']
             ok = c.check(race.state == Race.STATE_FINISHED,
-                         '%s cannot finish %s within %ds'
-                         % (car['name'], spec['name'], budget))
+                         '%s cannot finish %s on %s within %ds'
+                         % (car['name'], spec['name'], level['name'], budget))
             if ok:
                 margin = budget - race.finished_at
                 c.check(margin >= 3.0,
-                        '%s has only %.1fs to spare on %s - that car is a '
-                        'trap, not a choice'
-                        % (car['name'], margin, spec['name']))
-                key = car['name']
+                        '%s has only %.1fs to spare on %s (%s) - that '
+                        'combination is a trap, not a choice'
+                        % (car['name'], margin, spec['name'], level['name']))
+                key = (level['name'], car['name'])
                 if key not in slowest or margin < slowest[key][1]:
                     slowest[key] = (spec['name'], margin)
             race.clear()
-    for name, (where, margin) in slowest.items():
-        c.note('%-12s tightest on %-14s %+.1fs to spare' % (name, where, margin))
+    for level in levels.LEVELS:
+        row = '  '.join('%s%+5.1f' % (car['name'][:6],
+                                      slowest[(level['name'], car['name'])][1])
+                        for car in garage.CARS
+                        if (level['name'], car['name']) in slowest)
+        c.note('%-7s tightest: %s' % (level['name'], row))
 
     # the whole point of the clock: a sloppy run must be able to fail
     timeouts = sum(1 for (_, label), (state, _, _) in results.items()

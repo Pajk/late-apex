@@ -333,6 +333,80 @@ def draw_van(body, w=112, h=86, lean=0, braking=False, ambulance=False):
     return s
 
 
+def draw_oncoming(body, w=112, h=64, lean=0, truck=False):
+    """Front view, for traffic coming the other way: headlights, grille and a
+    windscreen instead of tail lights and a rear deck."""
+    s = surf(w, h)
+    cx = w / 2
+    lo = lean * 2.4
+    tilt = lean * 1.4
+    dark, darker = shade(body, 0.6), shade(body, 0.38)
+    light = shade(body, 1.22)
+    glass = (58, 74, 104)
+    ground = h - 3
+
+    if truck:
+        _wheels(s, w, h, cx, ground, tilt, span=0.42, size=(22, 20))
+        rect(s, (0, 0, 0, 120), cx - w * 0.42, ground - 2, w * 0.84, 4)
+        roof = ground - 52
+        poly(s, body, [(cx - w * 0.45, ground - 5 + tilt),
+                       (cx + w * 0.45, ground - 5 - tilt),
+                       (cx + w * 0.43, roof - tilt),
+                       (cx - w * 0.43, roof + tilt)])
+        poly(s, glass, [(cx - w * 0.37 + lo, roof + 5 + tilt),
+                        (cx + w * 0.37 + lo, roof + 5 - tilt),
+                        (cx + w * 0.37 + lo, roof + 24 - tilt),
+                        (cx - w * 0.37 + lo, roof + 24 + tilt)])
+        poly(s, shade(glass, 1.5), [(cx - w * 0.37 + lo, roof + 5 + tilt),
+                                    (cx - w * 0.05 + lo, roof + 5 - tilt),
+                                    (cx - w * 0.20 + lo, roof + 24),
+                                    (cx - w * 0.37 + lo, roof + 24 + tilt)])
+        rect(s, darker, cx - w * 0.45, ground - 20, w * 0.90, 8)
+        rect(s, (190, 194, 205), cx - w * 0.30, ground - 18, w * 0.60, 4)
+        lamp_y = ground - 16
+        lamp_w = 16
+    else:
+        _wheels(s, w, h, cx, ground, tilt, span=0.44, size=(22, 20))
+        rect(s, (0, 0, 0, 120), cx - w * 0.42, ground - 2, w * 0.84, 4)
+        poly(s, body, [(cx - w * 0.46, ground - 5 + tilt),
+                       (cx + w * 0.46, ground - 5 - tilt),
+                       (cx + w * 0.43, ground - 30 - tilt),
+                       (cx - w * 0.43, ground - 30 + tilt)])
+        poly(s, light, [(cx - w * 0.43, ground - 30 + tilt),
+                        (cx + w * 0.43, ground - 30 - tilt),
+                        (cx + w * 0.41, ground - 26 - tilt),
+                        (cx - w * 0.41, ground - 26 + tilt)])
+        cab_top = ground - 48
+        poly(s, dark, [(cx - w * 0.33 + lo, ground - 30 + tilt),
+                       (cx + w * 0.33 + lo, ground - 30 - tilt),
+                       (cx + w * 0.27 + lo, cab_top - tilt),
+                       (cx - w * 0.27 + lo, cab_top + tilt)])
+        poly(s, glass, [(cx - w * 0.29 + lo, ground - 32 + tilt),
+                        (cx + w * 0.29 + lo, ground - 32 - tilt),
+                        (cx + w * 0.23 + lo, cab_top + 3 - tilt),
+                        (cx - w * 0.23 + lo, cab_top + 3 + tilt)])
+        poly(s, shade(glass, 1.45),
+             [(cx - w * 0.23 + lo, cab_top + 3 + tilt),
+              (cx + w * 0.02 + lo, cab_top + 3 - tilt),
+              (cx - w * 0.12 + lo, ground - 32),
+              (cx - w * 0.29 + lo, ground - 32 + tilt)])
+        rect(s, darker, cx - w * 0.44, ground - 14, w * 0.88, 7)
+        lamp_y = ground - 26
+        lamp_w = 20
+
+    # headlights, with a little glow so they read at distance
+    for side in (-1, 1):
+        lx = cx + side * w * 0.29 - lamp_w / 2
+        rect(s, (120, 118, 96), lx - 1, lamp_y - 1, lamp_w + 2, 11)
+        rect(s, (255, 246, 198), lx, lamp_y, lamp_w, 9)
+        rect(s, (255, 255, 255), lx + 2, lamp_y + 2, lamp_w - 4, 4)
+    # indicators
+    for side in (-1, 1):
+        rect(s, (250, 168, 40), cx + side * w * 0.42 - 5, ground - 22, 8, 6)
+    rect(s, (222, 222, 210), cx - 9, ground - 12, 18, 6)
+    return s
+
+
 def gen_cars():
     """Ten frames per playable car (five steering angles x brake lights) plus
     the rival field."""
@@ -360,6 +434,18 @@ def gen_cars():
         for lean in (-1, 0, 1):
             img = draw_car(col, w=110, h=62, lean=lean, detail=(i % 2 == 0))
             names.append(save(img, 'car_rival%d_%d' % (i, lean + 1)))
+
+    # traffic coming the other way, seen head on
+    oncoming = [(214, 214, 220), (56, 92, 168), (176, 52, 48),
+                (208, 176, 64), (72, 132, 96), (120, 120, 132)]
+    for i, col in enumerate(oncoming):
+        for lean in (-1, 0, 1):
+            img = draw_oncoming(col, lean=lean)
+            names.append(save(img, 'car_onc%d_%d' % (i, lean + 1)))
+    for i, col in enumerate([(226, 226, 230), (196, 140, 60)]):
+        for lean in (-1, 0, 1):
+            img = draw_oncoming(col, w=118, h=76, lean=lean, truck=True)
+            names.append(save(img, 'car_truck%d_%d' % (i, lean + 1)))
     return names
 
 

@@ -6,6 +6,7 @@ import random
 import pygame
 
 from . import cars as garage
+from . import difficulty as diff
 from . import pixelfont as pf
 from .config import BASE_HEIGHT, BASE_WIDTH, SCALE
 from .render import (WIDTH, HEIGHT, DRAW_DISTANCE, OBJECT_SCALE, CAMERA_HEIGHT,
@@ -24,6 +25,7 @@ KMH_PER_UNIT = 310.0 / MAX_SPEED
 GEARS = 5
 PLAYER_W = 0.32       # car width in road half-widths
 RIVAL_W = 0.32        # rivals are the same width, and must look it
+TRUCK_W = 0.42
 INK = (236, 240, 250)
 # HUD geometry on the 320x200 design grid. The player car is placed against
 # HUD_BOTTOM so the instrument panel cannot swallow its wheels.
@@ -43,20 +45,30 @@ def overlap(x1, w1, x2, w2, slack=0.85):
 
 
 class Rival:
-    __slots__ = ('z', 'offset', 'speed', 'sprite', 'size', 'colour', 'lean',
-                 'seg', 'total', 'lap')
+    """A car on the road. direction -1 means it is coming the other way, in
+    which case it holds its lane and is drawn from the front."""
 
-    def __init__(self, z, offset, speed, colour):
+    __slots__ = ('z', 'offset', 'speed', 'sprite', 'size', 'colour', 'lean',
+                 'seg', 'total', 'lap', 'direction', 'kind', 'body')
+
+    def __init__(self, z, offset, speed, colour, direction=1, kind='rival',
+                 body=RIVAL_W):
         self.z = z
         self.offset = offset
         self.speed = speed
         self.colour = colour
+        self.direction = direction
+        self.kind = kind
+        self.body = body
         self.lean = 1
         self.size = 0.97      # overwritten from the real sprite on spawn
-        self.sprite = 'car_rival%d_1' % colour
+        self.sprite = '%s%d_1' % (_PREFIX[kind], colour)
         self.seg = None
         self.total = z
         self.lap = 0
+
+
+_PREFIX = {'rival': 'car_rival', 'oncoming': 'car_onc', 'truck': 'car_truck'}
 
 
 class Player:
@@ -93,11 +105,19 @@ class Race:
     STATE_FINISHED = 2
     STATE_TIMEUP = 3
 
-    def __init__(self, track, renderer, audio, scores, rng=None, car=None):
+    def __init__(self, track, renderer, audio, scores, rng=None, car=None,
+                 level=None):
         self.car = car or garage.DEFAULT
+        self.level = level or diff.DEFAULT
+        self.lanes = self.level['lanes']
+        # The world keeps its scale while the tarmac narrows, so every width
+        # measured in road half-widths grows by the same factor.
+        self.road = ROAD_WIDTH * self.level['road']
+        self._widen = 1.0 / self.level['road']
         self.top_speed = MAX_SPEED * self.car['speed']
         self.car_accel = ACCEL * self.car['accel']
-        self.car_body = self.car['body']
+        self.car_body = self.car['body'] * self._widen
+        self.rival_body = RIVAL_W * self._widen
         self.track = track
         self.r = renderer
         self.audio = audio
@@ -106,9 +126,11 @@ class Race:
         self.colors = renderer.colors_for(track.theme)
         self.player = Player()
         self.cars = []
+        self.traffic = []
+        self.rival_count = track.rivals
         self.state = self.STATE_COUNTDOWN
         self.countdown = 3.9
-        self.time_left = float(track.start_time)
+        self.time_left = float(track.start_time) * self.level['time']
         self.race_time = 0.0
         self.lap_time = 0.0
         self.lap_times = []
@@ -130,26 +152,54 @@ class Race:
         self._init_weather()
 
     # -- setup ----------------------------------------------------------
+    def _sprite_size(self, name, body):
+        """Draw scale derived from the collision width and the real sprite, so
+        a car can never render narrower than the box you hit."""
+        w = self.r.assets.get(name).get_width()
+        return body * ROAD_WIDTH / (w * OBJECT_SCALE)
+
     def _spawn_rivals(self):
-        n = self.track.rivals
-        total = len(self.track.segments)
-        # Derive the draw scale from the collision width and the actual sprite,
-        # so a rival can never render narrower than the box you hit.
-        sprite_w = self.r.assets.get('car_rival0_1').get_width()
-        size = RIVAL_W * ROAD_WIDTH / (sprite_w * OBJECT_SCALE)
+        mine, theirs = diff.lanes_for(self.level)
+        n = max(2, int(round(self.track.rivals * self.level['rivals'])))
+        self.rival_count = n
+        size = self._sprite_size('car_rival0_1', RIVAL_W)
         for i in range(n):
             z = (i + 1) * (self.track.length / (n + 1.0)) * 0.55 + 1500
-            off = self.rng.choice([-0.62, -0.24, 0.24, 0.62]) \
-                + self.rng.uniform(-0.06, 0.06)
+            off = self.rng.choice(mine) + self.rng.uniform(-0.13, 0.13)
             speed = MAX_SPEED * self.rng.uniform(0.56, 0.80) \
                 * self.track.par_speed
             car = Rival(z % self.track.length, off, speed, i % 6)
             car.size = size
-            seg = self.track.segment_at(car.z)
-            seg.cars.append(car)
-            car.seg = seg
+            self._attach(car)
             self.cars.append(car)
-        self._total_segments = total
+
+        if not theirs:
+            return
+        # Traffic the other way: evenly spread, holding its lane, at a speed
+        # that makes the closing rate frightening but the gaps survivable.
+        car_size = self._sprite_size('car_onc0_1', RIVAL_W)
+        truck_size = self._sprite_size('car_truck0_1', TRUCK_W)
+        count = int(round(self.track.length / 100000.0
+                          * self.level['traffic']))
+        for i in range(max(0, count)):
+            z = (self.track.length / max(1, count)) * i \
+                + self.rng.uniform(-900, 900)
+            lane = self.rng.choice(theirs)
+            truck = self.rng.random() < 0.22
+            speed = MAX_SPEED * self.rng.uniform(0.20, 0.34)
+            car = Rival(z % self.track.length,
+                        lane + self.rng.uniform(-0.04, 0.04), speed,
+                        self.rng.randrange(2) if truck else self.rng.randrange(6),
+                        direction=-1, kind='truck' if truck else 'oncoming',
+                        body=TRUCK_W if truck else RIVAL_W)
+            car.size = truck_size if truck else car_size
+            self._attach(car)
+            self.traffic.append(car)
+
+    def _attach(self, car):
+        seg = self.track.segment_at(car.z)
+        seg.cars.append(car)
+        car.seg = seg
 
     def _init_weather(self):
         kind = self.track.theme['weather']
@@ -164,13 +214,17 @@ class Race:
 
     def clear(self):
         """Detach rivals from the shared track segment lists."""
-        for car in self.cars:
+        for car in self.cars + self.traffic:
             if car.seg is not None and car in car.seg.cars:
                 car.seg.cars.remove(car)
             car.seg = None
 
     # -- helpers --------------------------------------------------------
     def message(self, text, ttl=1.6, colour=(255, 236, 120), big=True):
+        for m in self.messages:
+            if m[0] == text:            # refresh rather than stack
+                m[1] = max(m[1], ttl)
+                return
         self.messages.append([text, ttl, colour, big])
 
     @property
@@ -249,14 +303,14 @@ class Race:
         target = (-1.0 if keys['left'] else 0.0) + (1.0 if keys['right'] else 0.0)
         p.steer += (target - p.steer) * min(1.0, dt * 11.0)
         steer_rate = 2.5 * speed_pct * (0.55 + 0.45 * grip) \
-            * self.car['grip']
+            * self.car['grip'] * self.level['steer']
         p.x += p.steer * steer_rate * dt
 
         # ---- centrifugal push. It grows with the square of speed while
         # steering authority only grows linearly, so fast corners have to be
         # taken slower - lifting off is what makes a lap quick.
         drift = dt * speed_pct * speed_pct * seg.curve * CENTRIFUGAL \
-            / max(0.5, grip)
+            * self.level['centrifugal'] / max(0.5, grip)
         p.x -= drift
         p.slide += (abs(drift) * 42.0 - p.slide) * min(1.0, dt * 5.0)
 
@@ -327,11 +381,13 @@ class Race:
             self.audio.play('sfx_fanfare')
             self.message('FINISH!', 3.0, (140, 255, 160))
         else:
-            self.time_left += self.track.lap_bonus
+            self.time_left += self.track.lap_bonus * self.level['time']
             self.flash = 0.5
             self.audio.play('sfx_lap')
             self.audio.play('sfx_extend', 0.7)
-            self.message('LAP %d  +%dS' % (p.lap + 1, self.track.lap_bonus),
+            self.message('LAP %d  +%dS'
+                         % (p.lap + 1,
+                            int(self.track.lap_bonus * self.level['time'])),
                          1.8, (255, 236, 120))
 
     def _advance_rivals(self, dt, idle=False):
@@ -339,16 +395,23 @@ class Race:
         p = self.player
         n = len(track.segments)
         p_seg_i = int(p.z / SEGMENT_LENGTH) % n
-        for car in self.cars:
-            if not idle:
-                car.offset += self._rival_steer(car, p_seg_i) * dt
-                car.offset = clamp(car.offset, -0.92, 0.92)
+        edge = 0.98
+        for car in self.cars + self.traffic:
+            moving = 0.0 if idle else 1.0
+            if car.direction > 0:
+                if not idle:
+                    car.offset += self._rival_steer(car, p_seg_i) * dt
+                    car.offset = clamp(car.offset, -edge, edge)
+                car.z += car.speed * dt * moving
+                car.total += car.speed * dt * moving
+                if car.z >= track.length:
+                    car.z -= track.length
+                    car.lap += 1
+            else:
+                car.z -= car.speed * dt * moving
+                if car.z < 0:
+                    car.z += track.length
             old = car.seg
-            car.z += car.speed * dt * (0.0 if idle else 1.0)
-            car.total += car.speed * dt * (0.0 if idle else 1.0)
-            if car.z >= track.length:
-                car.z -= track.length
-                car.lap += 1
             new = track.segment_at(car.z)
             if new is not old:
                 if old is not None and car in old.cars:
@@ -360,7 +423,9 @@ class Race:
                 lean = 2
             elif new.curve < -2:
                 lean = 0
-            car.sprite = 'car_rival%d_%d' % (car.colour, lean)
+            if car.direction < 0:
+                lean = 2 - lean          # they lean the other way to us
+            car.sprite = '%s%d_%d' % (_PREFIX[car.kind], car.colour, lean)
 
     def _rival_steer(self, car, player_seg_i):
         """Look a short way ahead and drift out of the way of anything close."""
@@ -369,30 +434,36 @@ class Race:
         base = int(car.z / SEGMENT_LENGTH) % n
         look = 18
         if self.car['yield_traffic']:
-            # sirens: rivals pull over well before the player arrives
+            # Sirens: rivals start moving over before you arrive. Deliberately
+            # short-range and not a full lane change - on the narrow circuits
+            # a total clearance was worth 40 seconds a race.
             gap = (base - player_seg_i) % n
-            if gap < 42 and overlap(self.player.x, self.car_body + 0.5,
-                                    car.offset, RIVAL_W, 1.0):
-                return -1.4 if self.player.x > car.offset else 1.4
+            if gap < 24 and overlap(self.player.x, self.car_body + 0.35,
+                                    car.offset, car.body * self._widen, 1.0):
+                return -0.85 if self.player.x > car.offset else 0.85
         for i in range(1, look):
             seg = track.segments[(base + i) % n]
             if (base + i) % n == player_seg_i and \
                     car.speed > self.player.speed and \
-                    overlap(self.player.x, self.car_body, car.offset, RIVAL_W,
-                            1.4):
+                    overlap(self.player.x, self.car_body, car.offset,
+                            self.rival_body, 1.4):
                 return -0.9 if self.player.x > car.offset else 0.9
             for other in seg.cars:
-                if other is car:
+                if other is car or other.direction < 0:
                     continue
                 if car.speed > other.speed and \
-                        overlap(car.offset, RIVAL_W, other.offset, RIVAL_W,
-                                1.3):
+                        overlap(car.offset, self.rival_body, other.offset,
+                                self.rival_body, 1.3):
                     return -0.7 if other.offset > car.offset else 0.7
-        # ease back toward the middle of the road
-        if car.offset < -0.75:
-            return 0.35
-        if car.offset > 0.75:
-            return -0.35
+        # ease back into the lanes that run our way, firmly when straying
+        # into one carrying traffic the other way
+        mine, oncoming = diff.lanes_for(self.level)
+        margin = 0.0 if oncoming else 0.12
+        rate = 0.55 if oncoming else 0.35
+        if car.offset < min(mine) - margin:
+            return rate
+        if car.offset > max(mine) + margin:
+            return -rate
         return 0.0
 
     def _collide_scenery(self, seg):
@@ -410,18 +481,31 @@ class Race:
     def _collide_cars(self, seg):
         p = self.player
         for car in list(seg.cars):
-            if p.speed <= car.speed:
+            head_on = car.direction < 0
+            if not head_on and p.speed <= car.speed:
                 continue
-            if overlap(p.x, self.car_body, car.offset, RIVAL_W, 0.85):
-                keep = 0.72 + 0.14 * (self.car['mass'] - 1.0)
-                p.speed = max(car.speed * clamp(keep, 0.6, 0.95),
-                              p.speed * 0.55)
-                p.x += 0.16 if p.x > car.offset else -0.16
+            if overlap(p.x, self.car_body, car.offset,
+                       car.body * self._widen, 0.85):
+                mass = clamp(self.car['mass'], 0.8, 1.5)
+                if head_on:
+                    # meeting something at a combined 400 km/h ends your run
+                    p.speed *= clamp(0.14 * mass, 0.10, 0.24)
+                    p.x += 0.34 if p.x > car.offset else -0.34
+                    self.shake = max(self.shake, 7.5)
+                    self.audio.play('sfx_crash')
+                    self.message('HEAD ON!', 1.4, (255, 110, 110))
+                    for _ in range(16):
+                        self._smoke()
+                else:
+                    keep = 0.72 + 0.14 * (mass - 1.0)
+                    p.speed = max(car.speed * clamp(keep, 0.6, 0.95),
+                                  p.speed * 0.55)
+                    p.x += 0.16 if p.x > car.offset else -0.16
+                    self.shake = max(self.shake, 3.2)
+                    self.audio.play('sfx_crash', 0.6)
+                    for _ in range(9):
+                        self._smoke()
                 p.z = max(0.0, p.z - SEGMENT_LENGTH * 1.2)
-                self.shake = max(self.shake, 3.2)
-                self.audio.play('sfx_crash', 0.6)
-                for _ in range(9):
-                    self._smoke()
                 return
 
     def _crash(self, offset):
@@ -509,9 +593,10 @@ class Race:
         r.draw_background(th, self.sky_off, self.hill_off, self.tree_off,
                           horizon + shake_y)
         base_i, _ = r.draw_road(self.track, p.z, p.x,
-                                CAMERA_HEIGHT + shake_y * 30, self.colors)
+                                CAMERA_HEIGHT + shake_y * 30, self.colors,
+                                self.lanes, self.road)
         r.draw_scene_sprites(self.track, base_i, self.colors, p, self.cars,
-                             self._player_sprite(shake_y))
+                             self._player_sprite(shake_y), self.road)
         self._draw_particles(surface)
         if th['ambient']:
             tint = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -606,7 +691,7 @@ class Race:
         pf.draw_text(s, '%d/%d' % (min(p.lap + 1, self.track.laps),
                                    self.track.laps), 4, 13, INK, 1)
         pf.draw_text(s, 'POS', 36, 3, (150, 156, 180), 1)
-        pf.draw_text(s, '%d/%d' % (self.position, self.track.rivals + 1),
+        pf.draw_text(s, '%d/%d' % (self.position, self.rival_count + 1),
                      36, 13, INK, 1)
 
         # the countdown, the one number that decides the race

@@ -154,12 +154,12 @@ def project(p, cam_x, cam_y, cam_z, road_width):
     p.sw = p.scale * road_width * WIDTH / 2
 
 
-def rumble_width(projected_width):
-    return projected_width / max(6, 2 * LANES)
+def rumble_width(projected_width, lanes=LANES):
+    return projected_width / max(6, 2 * lanes)
 
 
-def lane_width(projected_width):
-    return projected_width / max(32, 8 * LANES)
+def lane_width(projected_width, lanes=LANES):
+    return projected_width / max(32, 8 * lanes)
 
 
 class Renderer:
@@ -205,7 +205,8 @@ class Renderer:
                 x += lw
 
     # -- road -----------------------------------------------------------
-    def draw_road(self, track, position, player_x, camera_h, colors):
+    def draw_road(self, track, position, player_x, camera_h, colors,
+                  lanes=LANES, road_width=ROAD_WIDTH):
         s = self.surface
         segs = track.segments
         n_segs = len(segs)
@@ -229,9 +230,9 @@ class Renderer:
             seg.fog_i = i
             seg.clip = maxy
             cz = position - (track.length if looped else 0)
-            project(seg.p1, player_x * ROAD_WIDTH - x, cam_y, cz, ROAD_WIDTH)
-            project(seg.p2, player_x * ROAD_WIDTH - x - dx, cam_y, cz,
-                    ROAD_WIDTH)
+            project(seg.p1, player_x * road_width - x, cam_y, cz, road_width)
+            project(seg.p2, player_x * road_width - x - dx, cam_y, cz,
+                    road_width)
             x += dx
             dx += seg.curve
 
@@ -251,7 +252,7 @@ class Renderer:
             # verge
             s.fill(col['grass'], (0, int(y2), WIDTH, int(y1 - y2) + 1))
 
-            r1, r2 = rumble_width(w1), rumble_width(w2)
+            r1, r2 = rumble_width(w1, lanes), rumble_width(w2, lanes)
             poly(s, col['rumble'], ((x1 - w1 - r1, y1), (x1 - w1, y1),
                                     (x2 - w2, y2), (x2 - w2 - r2, y2)))
             poly(s, col['rumble'], ((x1 + w1 + r1, y1), (x1 + w1, y1),
@@ -259,12 +260,12 @@ class Renderer:
             poly(s, col['road'], ((x1 - w1, y1), (x1 + w1, y1),
                                   (x2 + w2, y2), (x2 - w2, y2)))
             if col['lane'] and w1 > 6:
-                l1, l2 = lane_width(w1), lane_width(w2)
-                lw1 = w1 * 2 / LANES
-                lw2 = w2 * 2 / LANES
+                l1, l2 = lane_width(w1, lanes), lane_width(w2, lanes)
+                lw1 = w1 * 2 / lanes
+                lw2 = w2 * 2 / lanes
                 lx1 = x1 - w1 + lw1
                 lx2 = x2 - w2 + lw2
-                for _ in range(LANES - 1):
+                for _ in range(lanes - 1):
                     poly(s, col['lane'], ((lx1 - l1, y1), (lx1 + l1, y1),
                                           (lx2 + l2, y2), (lx2 - l2, y2)))
                     lx1 += lw1
@@ -275,7 +276,7 @@ class Renderer:
 
     # -- sprites --------------------------------------------------------
     def draw_scene_sprites(self, track, base_i, colors, player, cars,
-                           player_sprite):
+                           player_sprite, road_width=ROAD_WIDTH):
         s = self.surface
         a = self.assets
         segs = track.segments
@@ -299,7 +300,7 @@ class Renderer:
                 cs = car.size * OBJECT_SCALE
                 w = img.get_width() * scale * WIDTH / 2 * cs
                 h = img.get_height() * scale * WIDTH / 2 * cs
-                px = sx + scale * car.offset * ROAD_WIDTH * WIDTH / 2
+                px = sx + scale * car.offset * road_width * WIDTH / 2
                 self._blit_sprite(img, car.sprite, px, sy, w, h, seg.clip,
                                   fog_i, fog_color)
 
@@ -309,8 +310,8 @@ class Renderer:
                 w = img.get_width() * scale * WIDTH / 2 * ss
                 h = img.get_height() * scale * WIDTH / 2 * ss
                 centre = sprite_anchor(offset,
-                                       img.get_width() * ss / ROAD_WIDTH)
-                px = sx + scale * centre * ROAD_WIDTH * WIDTH / 2
+                                       img.get_width() * ss / road_width)
+                px = sx + scale * centre * road_width * WIDTH / 2
                 self._blit_sprite(img, name, px, sy, w, h, seg.clip, fog_i,
                                   fog_color)
 

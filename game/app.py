@@ -10,6 +10,7 @@ import pygame
 from . import pixelfont as pf
 from . import autopilot
 from . import cars as garage
+from . import difficulty as levels
 from . import track as tracks
 from .audio import Audio
 from .race import Race, fmt, MAX_SPEED
@@ -20,8 +21,8 @@ from .scores import Scores, ALPHABET, NAME_LEN, TABLE_SIZE
 TITLE = 'LATE APEX'
 BASE_SCALE = 3
 
-(S_TITLE, S_SELECT, S_CAR, S_RACE, S_PAUSE, S_RESULT, S_NAME, S_SCORES,
- S_HELP) = range(9)
+(S_TITLE, S_SELECT, S_DIFF, S_CAR, S_RACE, S_PAUSE, S_RESULT, S_NAME,
+ S_SCORES, S_HELP) = range(10)
 
 ACCENT = (255, 210, 60)
 ACCENT2 = (255, 90, 90)
@@ -62,6 +63,7 @@ class App:
         self.track_cache = {}
         self.sel = 0
         self.car_sel = 0
+        self.diff_sel = 0
         self.state = S_TITLE
         self.race = None
         self.demo = None
@@ -75,6 +77,7 @@ class App:
         self.result = None
         self.score_track = 0
         self.score_kind = 0
+        self.score_level = 'easy'
         self.music_on = True
         self.running = True
         self.show_fps = False
@@ -184,7 +187,7 @@ class App:
             return
         handler = {
             S_TITLE: self.key_title, S_SELECT: self.key_select,
-            S_CAR: self.key_car,
+            S_DIFF: self.key_diff, S_CAR: self.key_car,
             S_RACE: self.key_race, S_PAUSE: self.key_pause,
             S_RESULT: self.key_result, S_NAME: self.key_name,
             S_SCORES: self.key_scores, S_HELP: self.key_help,
@@ -220,13 +223,28 @@ class App:
             self.transition(S_HELP)
         elif k in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
             self.audio.play('sfx_select')
+            self.transition(S_DIFF)
+
+    def key_diff(self, k):
+        n = len(levels.LEVELS)
+        if k == pygame.K_ESCAPE:
+            self.audio.play('sfx_blip')
+            self.transition(S_SELECT)
+        elif k in (pygame.K_LEFT, pygame.K_a, pygame.K_UP, pygame.K_w):
+            self.diff_sel = (self.diff_sel - 1) % n
+            self.audio.play('sfx_blip')
+        elif k in (pygame.K_RIGHT, pygame.K_d, pygame.K_DOWN, pygame.K_s):
+            self.diff_sel = (self.diff_sel + 1) % n
+            self.audio.play('sfx_blip')
+        elif k in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+            self.audio.play('sfx_select')
             self.transition(S_CAR)
 
     def key_car(self, k):
         n = len(garage.CARS)
         if k == pygame.K_ESCAPE:
             self.audio.play('sfx_blip')
-            self.transition(S_SELECT)
+            self.transition(S_DIFF)
         elif k in (pygame.K_LEFT, pygame.K_a, pygame.K_UP, pygame.K_w):
             self.car_sel = (self.car_sel - 1) % n
             self.audio.play('sfx_blip')
@@ -315,6 +333,11 @@ class App:
         elif k in (pygame.K_UP, pygame.K_DOWN, pygame.K_TAB):
             self.score_kind ^= 1
             self.audio.play('sfx_blip')
+        elif k == pygame.K_d:
+            keys = [lv['key'] for lv in levels.LEVELS]
+            self.score_level = keys[(keys.index(self.score_level) + 1)
+                                    % len(keys)]
+            self.audio.play('sfx_blip')
 
     def key_help(self, k):
         self.audio.play('sfx_blip')
@@ -327,15 +350,16 @@ class App:
         placed = []
         if res['race_pos']:
             self.scores.insert(res['key'], 'race', text, res['race_time'],
-                               res['car'])
+                               res['car'], res['level'])
             placed.append('RACE')
         if res['lap_pos']:
             self.scores.insert(res['key'], 'lap', text, res['lap_time'],
-                               res['car'])
+                               res['car'], res['level'])
             placed.append('LAP')
         self.audio.play('sfx_select')
         self.score_track = self.sel
         self.score_kind = 0 if 'RACE' in placed else 1
+        self.score_level = levels.BY_KEY[res['level']]['key']
         self.transition(S_SCORES, 'abandon')
 
     def begin_race(self):
@@ -347,7 +371,8 @@ class App:
         key = self.spec(self.sel)['key']
         t = self.get_track(key)
         self.race = Race(t, self.renderer, self.audio, self.scores, self.rng,
-                         car=garage.CARS[self.car_sel])
+                         car=garage.CARS[self.car_sel],
+                         level=levels.LEVELS[self.diff_sel])
         self.audio.play_music(t.theme['music'])
         self.result = None
 
@@ -366,16 +391,19 @@ class App:
         completed = r.state == Race.STATE_FINISHED
         race_time = r.finished_at if completed else None
         lap_time = r.best_lap
-        race_pos = self.scores.position(key, 'race', race_time) \
+        lk = r.level['key']
+        race_pos = self.scores.position(key, 'race', race_time, lk) \
             if race_time else None
-        lap_pos = self.scores.position(key, 'lap', lap_time) \
+        lap_pos = self.scores.position(key, 'lap', lap_time, lk) \
             if lap_time else None
         self.result = {
             'key': key, 'name': r.track.name, 'completed': completed,
-            'car': r.car['tag'],
+            'car': r.car['tag'], 'level': r.level['key'],
+            'level_name': r.level['name'],
             'race_time': race_time, 'lap_time': lap_time,
             'race_pos': race_pos, 'lap_pos': lap_pos,
             'laps': list(r.lap_times), 'position': r.position,
+            'field': r.rival_count + 1,
             'qualifies': bool(race_pos or lap_pos),
         }
         self.audio.quiet()
@@ -447,6 +475,8 @@ class App:
                 self.draw_title(s)
             elif self.state == S_SELECT:
                 self.draw_select(s)
+            elif self.state == S_DIFF:
+                self.draw_difficulty(s)
             elif self.state == S_CAR:
                 self.draw_car_select(s)
             elif self.state == S_RESULT:
@@ -540,12 +570,69 @@ class App:
             pf.draw_text(s, '%s%s' % (marker, spec['name']), 14, y, col, 1)
             stars = '*' * tracks.DIFFICULTY[spec['key']]
             pf.draw_text(s, stars, BASE_WIDTH - 14, y, ACCENT2, 1, right=True)
-            best = self.scores.best(spec['key'], 'race')
+            best = self.scores.best(spec['key'], 'race',
+                                    levels.LEVELS[self.diff_sel]['key'])
             pf.draw_text(s, th['blurb'], 20, y + 9, DIM, 1)
             pf.draw_text(s, fmt(best), BASE_WIDTH - 14, y + 9, (150, 200, 255), 1,
                          right=True)
             y += 26
         pf.draw_text(s, 'ENTER RACE   H SCORES   I CONTROLS   ESC BACK',
+                     BASE_WIDTH // 2, BASE_HEIGHT - 10, DIM, 1, center=True)
+
+    def draw_difficulty(self, s):
+        self.overlay(s, 205)
+        self.checker(s, 0, 3, int(self.blink * 6) % 2)
+        lv = levels.LEVELS[self.diff_sel]
+        pf.draw_text(s, 'DIFFICULTY', BASE_WIDTH // 2, 8, ACCENT, 2,
+                     center=True, shadow=(90, 20, 30))
+        pf.draw_text(s, self.spec(self.sel)['name'], BASE_WIDTH // 2, 26, DIM,
+                     1, center=True)
+
+        y = 40
+        for i, level in enumerate(levels.LEVELS):
+            on = i == self.diff_sel
+            if on:
+                self.box(s, 10, y - 3, BASE_WIDTH - 20, 20, 190, ACCENT)
+            col = ACCENT if on else INK
+            marker = '>' if on and int(self.blink * 3) % 2 == 0 else ' '
+            pf.draw_text(s, '%s%s' % (marker, level['name']), 16, y, col, 1)
+            pf.draw_text(s, '*' * level['stars'], BASE_WIDTH - 16, y, ACCENT2,
+                         1, right=True)
+            pf.draw_text(s, level['blurb'], 22, y + 9, DIM, 1)
+            y += 24
+
+        # a little diagram of the road you are choosing
+        mine, oncoming = levels.lanes_for(lv)
+        cx, top, h = BASE_WIDTH // 2, 118, 46
+        half = int(52 * lv['road'])
+        s.fill((52, 52, 62), (cx - half, top, half * 2, h))
+        s.fill((198, 40, 60), (cx - half - 3, top, 3, h))
+        s.fill((198, 40, 60), (cx + half, top, 3, h))
+        for c in levels.lane_centres(lv['lanes'])[:-1]:
+            x = cx + int((c + 1.0 / lv['lanes']) * half)
+            for yy in range(top + 3, top + h - 2, 7):
+                s.fill((220, 220, 210), (x, yy, 1, 4))
+        # direction arrows, drawn rather than lettered: the bitmap font has
+        # no caret and would fall back to a question mark
+        def arrow(x, y, up, colour):
+            tip = y - 6 if up else y + 6
+            pygame.draw.polygon(s, colour, [(x, tip), (x - 5, y), (x + 5, y)])
+            s.fill(colour, (x - 2, y if up else y - 6, 4, 6))
+
+        for c in mine:
+            arrow(cx + int(c * half), top + h - 10, True, (120, 240, 140))
+        for c in oncoming:
+            arrow(cx + int(c * half), top + 10, False, (255, 110, 110))
+        label = '%d LANES' % lv['lanes']
+        if oncoming:
+            label += '   %d ONCOMING' % len(oncoming)
+        pf.draw_text(s, label, BASE_WIDTH // 2, top + h + 4, INK, 1,
+                     center=True)
+        pf.draw_text(s, 'CLOCK +%d%%' % round((lv['time'] - 1) * 100),
+                     BASE_WIDTH // 2, top + h + 13, (150, 200, 255), 1,
+                     center=True)
+
+        pf.draw_text(s, 'UP/DOWN CHANGE   ENTER OK   ESC BACK',
                      BASE_WIDTH // 2, BASE_HEIGHT - 10, DIM, 1, center=True)
 
     def draw_car_select(self, s):
@@ -554,8 +641,9 @@ class App:
         car = garage.CARS[self.car_sel]
         pf.draw_text(s, 'CHOOSE YOUR CAR', BASE_WIDTH // 2, 8, ACCENT, 2,
                      center=True, shadow=(90, 20, 30))
-        pf.draw_text(s, self.spec(self.sel)['name'], BASE_WIDTH // 2, 26, DIM, 1,
-                     center=True)
+        pf.draw_text(s, '%s - %s' % (self.spec(self.sel)['name'],
+                                     levels.LEVELS[self.diff_sel]['name']),
+                     BASE_WIDTH // 2, 26, DIM, 1, center=True)
 
         # the car itself, on a little stage
         img = self.assets.get('car_%s_2n' % car['key'])
@@ -607,7 +695,8 @@ class App:
         pf.draw_text(s, 'RACE COMPLETE' if ok else 'OUT OF TIME', BASE_WIDTH // 2,
                      12, (140, 255, 160) if ok else ACCENT2, 2, center=True,
                      shadow=(60, 12, 24))
-        pf.draw_text(s, r['name'], BASE_WIDTH // 2, 30, INK, 1, center=True)
+        pf.draw_text(s, '%s - %s' % (r['name'], r['level_name']),
+                     BASE_WIDTH // 2, 30, INK, 1, center=True)
         y = 46
         for i, lt in enumerate(r['laps']):
             best = (r['lap_time'] is not None and abs(lt - r['lap_time']) < 1e-6)
@@ -622,9 +711,8 @@ class App:
             pf.draw_text(s, fmt(r['race_time']), 108, y, ACCENT, 2)
             y += 18
         pf.draw_text(s, 'FINISHED %d%s OF %d' % (
-            r['position'], _ordinal(r['position']),
-            self.get_track(r['key']).rivals + 1), BASE_WIDTH // 2, y, INK, 1,
-            center=True)
+            r['position'], _ordinal(r['position']), r['field']),
+            BASE_WIDTH // 2, y, INK, 1, center=True)
         y += 16
         if r['qualifies']:
             what = []
@@ -676,13 +764,14 @@ class App:
         self.checker(s, 0, 3, int(self.blink * 6) % 2)
         spec = self.spec(self.score_track)
         kind = 'race' if self.score_kind == 0 else 'lap'
+        level = levels.get(self.score_level)
         pf.draw_text(s, 'HALL OF FAME', BASE_WIDTH // 2, 10, ACCENT, 2, center=True,
                      shadow=(90, 20, 30))
         pf.draw_text(s, '< %s >' % spec['name'], BASE_WIDTH // 2, 28, INK, 1,
                      center=True)
-        pf.draw_text(s, 'BEST %s TIMES' % kind.upper(), BASE_WIDTH // 2, 39,
-                     (150, 200, 255), 1, center=True)
-        rows = self.scores.table(spec['key'], kind)
+        pf.draw_text(s, 'BEST %s TIMES  -  %s' % (kind.upper(), level['name']),
+                     BASE_WIDTH // 2, 39, (150, 200, 255), 1, center=True)
+        rows = self.scores.table(spec['key'], kind, level['key'])
         y = 52
         for i, row in enumerate(rows[:TABLE_SIZE]):
             col = ACCENT if i == 0 else INK
@@ -692,7 +781,7 @@ class App:
                 pf.draw_text(s, row['car'], 132, y, (130, 140, 170), 1)
             pf.draw_text(s, fmt(row['time']), BASE_WIDTH - 84, y, col, 1, right=True)
             y += 13
-        pf.draw_text(s, 'LEFT/RIGHT CIRCUIT   UP/DOWN RACE-LAP   ESC BACK',
+        pf.draw_text(s, 'L/R CIRCUIT  U/D RACE-LAP  D DIFFICULTY  ESC BACK',
                      BASE_WIDTH // 2, BASE_HEIGHT - 10, DIM, 1, center=True)
 
     def draw_help(self, s):

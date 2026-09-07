@@ -33,7 +33,7 @@ def step(n):
 step(40)
 title_colours = len({app.screen.get_at((x, y))[:3]
                      for x in range(8, WIDTH, 29) for y in range(8, HEIGHT, 19)})
-for _ in range(3):
+for _ in range(4):          # title -> circuit -> difficulty -> garage -> race
     press(pygame.K_RETURN); step(50)
 racing = app.state
 r = app.race

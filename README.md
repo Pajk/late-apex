@@ -27,6 +27,33 @@ The title is the technique the physics rewards. Sideways force grows with the
 fast corner cannot be taken flat. Brake, turn in late, get the car straight
 early, and use the power sooner — a late apex is quicker than a pretty one.
 
+## Difficulty
+
+<img src="docs/difficulty.png" width="420" align="right" alt="Difficulty select">
+
+Three levels, and they change the road itself rather than nudging numbers.
+
+| | Road | Traffic | Physics |
+| --- | --- | --- | --- |
+| **Easy** | 3 lanes | Rivals only | Standard |
+| **Medium** | 4 lanes, wider | The left two lanes come at you | Standard |
+| **Hard** | 2 lanes, narrow | Head-on, and more of it | 55% more cornering force, less steering |
+
+<br clear="right">
+
+On medium and hard the left-hand lanes carry traffic the other way, drawn head
+on — headlights, not tail lights. Meeting one at a combined 400 km/h takes
+almost all your speed, so the racing line stops being an option and staying on
+your own side becomes the skill.
+
+Hard also narrows the tarmac to 74% while the world keeps its scale, so your
+car fills more of the road, and raises the sideways force enough that corners
+have to be braked for properly. The countdown is scaled to match each level —
++10% on medium, +45% on hard — set from measured lap times rather than guessed.
+
+High score tables are kept separately per difficulty: a time set on easy is not
+comparable with one set dodging oncoming traffic.
+
 ## The garage
 
 <img src="docs/garage.png" width="420" align="right" alt="Car select screen">
@@ -108,7 +135,8 @@ noticeably less grip to work with.
 
 Best race times and best lap times are kept per circuit, eight entries each,
 under a three-character name entered the old way — arrows to pick a letter, or
-just type it. The table also records which car set the time.
+just type it. The table also records which car set the time, and each
+difficulty keeps its own tables.
 
 They live in `~/Library/Application Support/LateApex/scores.json`.
 
@@ -204,17 +232,17 @@ the detail in it changes. Default is unchanged at 320x200.
 ## Tests
 
 ```bash
-./test.sh                  # everything, about 8 seconds
+./test.sh                  # everything, about 20 seconds
 ./test.sh geometry rules   # just those suites
 ```
 
 | Suite | Checks |
 | --- | --- |
 | `geometry` | Sprite anchoring, nothing collidable on the racing line, each lap joining back up |
-| `rules` | Standing start, lap counting and time bonuses, turbo limits, the off-road penalty, per-car handling and the ambulance siren |
+| `rules` | Standing start, lap counting and time bonuses, turbo limits, the off-road penalty, per-car handling, the ambulance siren, and that traffic runs the right way on the right side |
 | `render` | All five circuits draw, frames are not blank, speed leaves 60fps headroom |
-| `ui` | Title → circuits → garage → race → pause → results → name entry → score table, and that scores persist |
-| `balance` | An autopilot races every car on every circuit; all 25 combinations must finish with time in hand, and a sloppy run must still be able to fail |
+| `ui` | Title → circuits → difficulty → garage → race → pause → results → name entry → score table, that scores persist, and that they do not leak between difficulties |
+| `balance` | An autopilot races every car on every circuit at every difficulty; all 75 combinations must finish with time in hand, and a sloppy run must still be able to fail |
 | `hires` | The optional hi-res mode, in a subprocess since the scale is fixed at import time: default stays 320x200, the HUD keeps its own grid, the window does not change size |
 
 The suite runs headless and writes contact sheets to `tests/output/`, so a run
@@ -232,6 +260,7 @@ game/
   render.py           the pseudo-3D road renderer
   track.py            road geometry and the five themed circuits
   cars.py             the garage and its handling numbers
+  difficulty.py       lanes, oncoming traffic and cornering per level
   config.py           render scale, read once at import time
   autopilot.py        the driver used by the demo, the tests and capture
   audio.py            music, engine crossfades, effects

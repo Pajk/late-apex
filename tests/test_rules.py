@@ -10,14 +10,15 @@ import random
 from tests import harness
 
 
-def _race(key='country', seed=1, car=None):
+def _race(key='country', seed=1, car=None, level=None):
     from game.render import Assets, Renderer
     from game.race import Race
     from game import track as T
     from game.scores import Scores
     renderer = Renderer(Assets(harness.ROOT))
     return Race(T.load(key), renderer, harness.silent_audio(),
-                Scores(T.TRACK_SPECS), random.Random(seed), car=car)
+                Scores(T.TRACK_SPECS), random.Random(seed), car=car,
+                level=level)
 
 
 HOLD = {'left': False, 'right': False, 'accel': True, 'brake': False}
@@ -186,5 +187,75 @@ def run():
             'for the plain car)' % (siren, plain))
     c.note('siren pushed the rival aside %.2f vs %.2f without it'
            % (siren, plain))
+
+    # -- difficulty reshapes the road ----------------------------------
+    from game import difficulty as levels
+    from game.track import ROAD_WIDTH
+    for level in levels.LEVELS:
+        race = _race(level=level)
+        mine, oncoming = levels.lanes_for(level)
+        c.check(race.lanes == level['lanes'],
+                '%s does not use %d lanes' % (level['name'], level['lanes']))
+        c.check(abs(race.road - ROAD_WIDTH * level['road']) < 1e-6,
+                '%s does not resize the road' % level['name'])
+        c.check(bool(race.traffic) == bool(oncoming),
+                '%s traffic is %s when oncoming lanes are %s'
+                % (level['name'], len(race.traffic), bool(oncoming)))
+        # racers keep to our side, traffic to theirs
+        for car in race.cars:
+            c.check(car.direction > 0, '%s racer drives backwards'
+                    % level['name'])
+            if oncoming:
+                c.check(car.offset > 0,
+                        '%s put a racer in an oncoming lane (%.2f)'
+                        % (level['name'], car.offset))
+        for car in race.traffic:
+            c.check(car.direction < 0,
+                    '%s traffic does not come at you' % level['name'])
+            c.check(car.offset < 0,
+                    '%s put oncoming traffic in your lanes (%.2f)'
+                    % (level['name'], car.offset))
+            c.check(car.sprite.startswith(('car_onc', 'car_truck')),
+                    '%s draws oncoming traffic from behind (%s)'
+                    % (level['name'], car.sprite))
+        c.note('%-7s %d lanes, %d racers, %d oncoming, road x%.2f'
+               % (level['name'], race.lanes, len(race.cars),
+                  len(race.traffic), level['road']))
+        race.clear()
+
+    # -- traffic actually moves towards you ----------------------------
+    race = _race(level=levels.get('hard'))
+    race.state = Race.STATE_RACING
+    car = race.traffic[0]
+    before = car.z
+    for _ in range(30):
+        race.update(1 / 60.0, COAST)
+    moved = (before - car.z) % race.track.length
+    c.check(0 < moved < race.track.length / 2,
+            'oncoming traffic did not travel towards the player (%.0f)' % moved)
+    race.clear()
+
+    # -- a head-on costs far more than being nudged from behind --------
+    def hit(level_key, head_on):
+        race = _race(level=levels.get(level_key))
+        race.state = Race.STATE_RACING
+        pool = race.traffic if head_on else race.cars
+        other = pool[0]
+        race.player.z = other.z - (600 if head_on else -600) * (1 if head_on
+                                                                else -1)
+        race.player.z = (other.z - 600) % race.track.length
+        race.player.x = other.offset
+        race.player.speed = MAX_SPEED * 0.9
+        for _ in range(40):
+            race.update(1 / 60.0, COAST)
+        left = race.player.speed / MAX_SPEED
+        race.clear()
+        return left
+
+    head_on_left = hit('hard', True)
+    c.check(head_on_left < 0.35,
+            'meeting traffic head on barely slowed the car (%.0f%% of top '
+            'speed left)' % (100 * head_on_left))
+    c.note('head-on leaves %.0f%% of top speed' % (100 * head_on_left))
 
     return c.report()
