@@ -23,6 +23,8 @@ import pygame  # noqa: E402
 
 from game import autopilot  # noqa: E402
 from game import cars as garage  # noqa: E402
+from game import difficulty as levels  # noqa: E402
+from game import pixelfont as pf  # noqa: E402
 from game import track as T  # noqa: E402
 from game.race import Race, MAX_SPEED  # noqa: E402
 from game.render import Assets, Renderer, WIDTH, HEIGHT  # noqa: E402
@@ -32,7 +34,7 @@ DOCS = os.path.join(ROOT, 'docs')
 SHOT_SCALE = 3
 GIF_SCALE = 2
 GIF_FPS = 20
-GIF_SECONDS_PER_TRACK = 1.8
+GIF_SECONDS_PER_TRACK = 1.6
 
 
 def upscale(surface, factor):
@@ -55,12 +57,12 @@ class Session:
         self.scores = Scores(T.TRACK_SPECS)
         self.surface = pygame.Surface((WIDTH, HEIGHT)).convert()
 
-    def race(self, key, seed=7, car=None):
+    def race(self, key, seed=7, car=None, level=None):
         """A race posed mid-way through lap two, so the HUD in a screenshot
         shows the numbers a player would actually be looking at."""
         track = T.load(key)
         race = Race(track, self.renderer, _Silent(), self.scores,
-                    random.Random(seed), car=car)
+                    random.Random(seed), car=car, level=level)
         race.state = Race.STATE_RACING
         race.player.speed = MAX_SPEED * 0.6
         race.player.lap = 1
@@ -188,8 +190,40 @@ def capture_menus():
     return made
 
 
+# What the montage shows: circuit, difficulty, car. Deliberately mixed so the
+# oncoming-traffic levels and the odder vehicles both get screen time.
+GIF_REEL = [
+    ('country', 'easy', 'wedge'),
+    ('city', 'medium', 'gt'),
+    ('desert', 'hard', 'f1'),
+    ('summer', 'medium', 'ambulance'),
+    ('winter', 'hard', 'bike'),
+    ('country', 'medium', 'coupe'),
+]
+
+
+VIEW = 16000
+
+
+def _traffic_ahead(race):
+    """How much oncoming traffic is worth showing, weighted towards cars that
+    are close: a speck on the horizon does not demonstrate anything."""
+    length = race.track.length
+    score = 0.0
+    for c in race.traffic:
+        gap = (c.z - race.player.z) % length
+        if 0 < gap < VIEW:
+            score += (1.0 - gap / VIEW) ** 2
+    return score
+
+
 def capture_gif(session):
-    """A montage across all five circuits - the variety is the point."""
+    """A montage across circuits, difficulties and cars.
+
+    Two passes per segment: the first drives the whole stretch recording where
+    the oncoming traffic actually is, the second replays from the best window
+    so the traffic levels are shown carrying traffic rather than an empty road.
+    """
     try:
         from PIL import Image  # noqa: F401
     except ImportError:
@@ -199,16 +233,49 @@ def capture_gif(session):
     frames = []
     per_track = int(GIF_SECONDS_PER_TRACK * GIF_FPS)
     stride = max(1, int(round(60 / GIF_FPS)))
-    for i, spec in enumerate(T.TRACK_SPECS):
-        race = session.race(spec['key'], car=garage.CARS[i % len(garage.CARS)])
-        session.settle(race, 16)
+    scan = per_track * 4
+
+    for circuit, level_key, car_key in GIF_REEL:
+        level = levels.get(level_key)
+        car = garage.get(car_key)
+        label = '%s   %s' % (level['name'], car['name'])
+
+        def fresh():
+            race = session.race(circuit, car=car, level=level)
+            session.settle(race, 15)
+            return race
+
+        # pass one: where is the traffic?
+        race = fresh()
+        counts = []
+        for _ in range(scan):
+            for _ in range(stride):
+                session.frame(race)
+            counts.append(_traffic_ahead(race))
+        race.clear()
+
+        start = 0
+        if any(counts):
+            windows = [(sum(counts[i:i + per_track]), i)
+                       for i in range(len(counts) - per_track)]
+            start = max(windows)[1] if windows else 0
+
+        # pass two: replay and capture from there
+        race = fresh()
+        for _ in range(start * stride):
+            session.frame(race)
+        seen = 0
         for _ in range(per_track):
             for _ in range(stride):
                 surf = session.frame(race)
-            frames.append(to_pil(upscale(surf, GIF_SCALE)))
+            seen = max(seen, _traffic_ahead(race))
+            shot = surf.copy()
+            pf.draw_text(shot, label, 4, 28, (235, 238, 248), 1,
+                         shadow=(10, 10, 20))
+            frames.append(to_pil(upscale(shot, GIF_SCALE)))
+        print('  %-9s %-7s %-12s %d frames, closest-traffic score %.2f'
+              % (circuit, level['name'], car['name'], per_track, seen))
         race.clear()
-        print('  %-14s %-12s %d frames'
-              % (spec['name'], race.car['name'], per_track))
 
     path = os.path.join(DOCS, 'gameplay.gif')
     first, rest = frames[0], frames[1:]
