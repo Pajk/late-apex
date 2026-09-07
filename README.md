@@ -138,10 +138,29 @@ Zip it with `ditto`, which preserves the bundle and its signature:
 ditto -c -k --keepParent "dist/Late Apex.app" ~/Desktop/LateApex.zip
 ```
 
-It is ad-hoc signed but not notarized, so on first launch macOS will say it
-cannot verify the developer: right-click the app, choose **Open**, and confirm.
-After that it launches normally. Prebuilt copies are on the
-[releases page](../../releases).
+Prebuilt copies are on the [releases page](../../releases).
+
+### Getting past Gatekeeper
+
+The app is ad-hoc signed but not notarized, so the first launch of a downloaded
+copy is blocked with *"Apple could not verify 'Late Apex' is free of malware"*.
+
+**On macOS 15 (Sequoia) and later the old right-click → Open trick no longer
+works.** Either strip the quarantine flag the browser attached:
+
+```bash
+xattr -dr com.apple.quarantine "$HOME/Downloads/Late Apex.app"
+```
+
+…or open it once, click **Done**, then go to **System Settings → Privacy &
+Security**, find *"Late Apex" was blocked to protect your Mac* and click **Open
+Anyway**. That button only appears after a blocked attempt and expires about an
+hour later.
+
+On macOS 14 and earlier, right-clicking the app and choosing **Open** is enough.
+
+Building it yourself with `./tools/make_standalone.sh` avoids this entirely —
+locally built apps are never quarantined.
 
 ## Generated assets
 
