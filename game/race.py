@@ -7,6 +7,7 @@ import pygame
 
 from . import cars as garage
 from . import pixelfont as pf
+from .config import BASE_HEIGHT, BASE_WIDTH, SCALE
 from .render import (WIDTH, HEIGHT, DRAW_DISTANCE, OBJECT_SCALE, CAMERA_HEIGHT,
                      CAMERA_DEPTH, sprite_anchor)
 from .track import SEGMENT_LENGTH, ROAD_WIDTH
@@ -423,14 +424,18 @@ class Race:
 
     def _smoke(self):
         self.particles.append(Particle(
-            WIDTH / 2 + self.rng.uniform(-34, 34), HEIGHT - 26,
-            self.rng.uniform(-40, 40), self.rng.uniform(-46, -8),
+            WIDTH / 2 + self.rng.uniform(-34, 34) * SCALE,
+            HEIGHT - 26 * SCALE,
+            self.rng.uniform(-40, 40) * SCALE,
+            self.rng.uniform(-46, -8) * SCALE,
             self.rng.uniform(0.35, 0.85), 'smoke', self.rng.randint(0, 2)))
 
     def _dust(self, side):
         self.particles.append(Particle(
-            WIDTH / 2 + side * self.rng.uniform(22, 44), HEIGHT - 20,
-            side * self.rng.uniform(6, 40), self.rng.uniform(-30, -4),
+            WIDTH / 2 + side * self.rng.uniform(22, 44) * SCALE,
+            HEIGHT - 20 * SCALE,
+            side * self.rng.uniform(6, 40) * SCALE,
+            self.rng.uniform(-30, -4) * SCALE,
             self.rng.uniform(0.25, 0.55), 'smoke', self.rng.randint(0, 2)))
 
     def _update_position(self):
@@ -455,7 +460,7 @@ class Race:
                 continue
             pt.x += pt.vx * dt
             pt.y += pt.vy * dt
-            pt.vy += 40 * dt
+            pt.vy += 40 * dt * SCALE
             alive.append(pt)
         self.particles = alive
         if self.weather:
@@ -480,13 +485,15 @@ class Race:
             self.message('TURBO!', 1.0, (255, 170, 60))
 
     # -- drawing --------------------------------------------------------
-    def draw(self, surface):
+    def draw(self, surface, ui=None):
+        """World goes to `surface`; the HUD goes to `ui`, which in hi-res mode
+        is a separate 320x200 layer scaled up later so the font stays crisp."""
         r = self.r
         r.surface = surface
         th = self.track.theme
         p = self.player
-        horizon = HEIGHT * 0.5 + 4
-        shake_y = int(math.sin(self.shake * 9) * self.shake)
+        horizon = HEIGHT * 0.5 + 4 * SCALE
+        shake_y = int(math.sin(self.shake * 9) * self.shake) * SCALE
         r.draw_background(th, self.sky_off, self.hill_off, self.tree_off,
                           horizon + shake_y)
         base_i, _ = r.draw_road(self.track, p.z, p.x,
@@ -500,7 +507,7 @@ class Race:
             surface.blit(tint, (0, 0))
         self._draw_weather(surface)
         self._draw_speedlines(surface)
-        self.draw_hud(surface)
+        self.draw_hud(ui if ui is not None else surface)
 
     def _player_sprite(self, shake_y):
         p = self.player
@@ -518,14 +525,14 @@ class Race:
         name = 'car_%s_%d%s' % (self.car['key'], lean,
                                 'b' if p.braking else 'n')
         img = self.r.assets.get(name)
-        w = self.car['width']
+        w = self.car['width'] * SCALE
         h = int(img.get_height() * w / img.get_width())
         surf = self.r.assets.scaled(name, w, h)
-        bob = math.sin(p.bounce) * (1.0 + self.speed_ratio * 1.6)
+        bob = (math.sin(p.bounce) * (1.0 + self.speed_ratio * 1.6)) * SCALE
         if p.offroad:
-            bob += math.sin(p.bounce * 3.1) * 2.2
-        x = WIDTH / 2 - w / 2 + p.steer * 3
-        y = HEIGHT - h - 6 + bob + shake_y
+            bob += math.sin(p.bounce * 3.1) * 2.2 * SCALE
+        x = WIDTH / 2 - w / 2 + p.steer * 3 * SCALE
+        y = HEIGHT - h - 6 * SCALE + bob + shake_y
         return surf, (int(x), int(y))
 
     def _draw_particles(self, s):
@@ -535,7 +542,12 @@ class Race:
             key = (pt.size, step)
             img = cache.get(key)
             if img is None:
-                img = self.r.assets.get('fx_smoke%d' % pt.size).copy()
+                src = self.r.assets.get('fx_smoke%d' % pt.size)
+                if SCALE > 1:
+                    src = pygame.transform.scale(
+                        src, (src.get_width() * SCALE,
+                              src.get_height() * SCALE))
+                img = src.copy()
                 img.set_alpha(int(220 * step / 6.0))
                 cache[key] = img
             s.blit(img, (int(pt.x), int(pt.y)))
@@ -546,7 +558,8 @@ class Race:
         kind = self.track.theme['weather']
         col = (246, 250, 255) if kind == 'snow' else (226, 196, 140)
         for pt in self.weather:
-            s.fill(col, (int(pt.x), int(pt.y), pt.size, pt.size + 1))
+            s.fill(col, (int(pt.x), int(pt.y), pt.size * SCALE,
+                        (pt.size + 1) * SCALE))
 
     def _draw_speedlines(self, s):
         r = self.speed_ratio
@@ -556,8 +569,8 @@ class Race:
         cx, cy = WIDTH / 2, HEIGHT * 0.55
         for i in range(n):
             a = self.rng.uniform(0, math.pi * 2)
-            d0 = self.rng.uniform(60, 120)
-            ln = 8 + (r - 0.72) * 40
+            d0 = self.rng.uniform(60, 120) * SCALE
+            ln = (8 + (r - 0.72) * 40) * SCALE
             x0 = cx + math.cos(a) * d0
             y0 = cy + math.sin(a) * d0 * 0.6
             x1 = cx + math.cos(a) * (d0 + ln)
@@ -567,10 +580,10 @@ class Race:
     # -- HUD ------------------------------------------------------------
     def draw_hud(self, s):
         p = self.player
-        panel = pygame.Surface((WIDTH, 24), pygame.SRCALPHA)
+        panel = pygame.Surface((BASE_WIDTH, 24), pygame.SRCALPHA)
         panel.fill((10, 10, 22, 172))
         s.blit(panel, (0, 0))
-        s.fill((198, 40, 60), (0, 24, WIDTH, 1))
+        s.fill((198, 40, 60), (0, 24, BASE_WIDTH, 1))
 
         pf.draw_text(s, 'LAP', 5, 3, (150, 156, 180), 1)
         pf.draw_text(s, '%d/%d' % (min(p.lap + 1, self.track.laps),
@@ -586,21 +599,21 @@ class Race:
             col = (255, 90, 90) if int(t * 4) % 2 == 0 else (255, 200, 60)
         elif self.flash > 0 and int(self.flash * 12) % 2 == 0:
             col = (140, 255, 150)
-        pf.draw_text(s, '%02d' % int(min(99, math.ceil(t))), WIDTH // 2, 2,
+        pf.draw_text(s, '%02d' % int(min(99, math.ceil(t))), BASE_WIDTH // 2, 2,
                      col, 3, center=True, shadow=(60, 10, 20))
 
-        pf.draw_text(s, 'LAP TIME', WIDTH - 5, 3, (150, 156, 180), 1,
+        pf.draw_text(s, 'LAP TIME', BASE_WIDTH - 5, 3, (150, 156, 180), 1,
                      right=True)
-        pf.draw_text(s, fmt(self.lap_time), WIDTH - 5, 13, (255, 236, 120), 1,
+        pf.draw_text(s, fmt(self.lap_time), BASE_WIDTH - 5, 13, (255, 236, 120), 1,
                      right=True)
 
         # bottom instrument strip
         bh = 28
-        base = pygame.Surface((WIDTH, bh), pygame.SRCALPHA)
+        base = pygame.Surface((BASE_WIDTH, bh), pygame.SRCALPHA)
         base.fill((10, 10, 22, 172))
-        s.blit(base, (0, HEIGHT - bh))
-        s.fill((198, 40, 60), (0, HEIGHT - bh - 1, WIDTH, 1))
-        top = HEIGHT - bh
+        s.blit(base, (0, BASE_HEIGHT - bh))
+        s.fill((198, 40, 60), (0, BASE_HEIGHT - bh - 1, BASE_WIDTH, 1))
+        top = BASE_HEIGHT - bh
 
         pf.draw_text(s, '%3d' % int(self.kmh), 4, top + 4, (255, 240, 140), 3,
                      shadow=(60, 10, 20))
@@ -618,37 +631,37 @@ class Race:
         if p.turbo_left > 0:
             pf.draw_text(s, 'BOOST', bx, by + 8, (255, 170, 60), 1)
 
-        pf.draw_text(s, 'BEST ' + fmt(self.best_lap), WIDTH - 5, top + 4,
+        pf.draw_text(s, 'BEST ' + fmt(self.best_lap), BASE_WIDTH - 5, top + 4,
                      (170, 210, 255), 1, right=True)
         for i in range(3):
-            x = WIDTH - 11 - i * 9
+            x = BASE_WIDTH - 11 - i * 9
             on = i < p.turbo
             c = (255, 150, 40) if on else (58, 58, 74)
             if p.turbo_left > 0 and i == p.turbo and int(
                     p.turbo_left * 10) % 2 == 0:
                 c = (255, 240, 160)
             s.fill(c, (x, top + 14, 7, 8))
-        pf.draw_text(s, 'TURBO', WIDTH - 41, top + 15, (170, 176, 200), 1,
+        pf.draw_text(s, 'TURBO', BASE_WIDTH - 41, top + 15, (170, 176, 200), 1,
                      right=True)
 
         # centre messages
         y = 76
         for text, ttl, colour, big in self.messages:
             if ttl > 0:
-                pf.draw_text(s, text, WIDTH // 2, y, colour, 2 if big else 1,
+                pf.draw_text(s, text, BASE_WIDTH // 2, y, colour, 2 if big else 1,
                              center=True, shadow=(20, 12, 30))
                 y += 20
 
         if self.state == self.STATE_COUNTDOWN and self.countdown > 0:
             n = int(math.ceil(self.countdown - 0.9))
             if n >= 1:
-                pf.draw_text(s, str(min(3, n)), WIDTH // 2, 56,
+                pf.draw_text(s, str(min(3, n)), BASE_WIDTH // 2, 56,
                              (255, 236, 120), 6, center=True,
                              shadow=(120, 20, 40))
 
         if p.offroad and self.state == self.STATE_RACING:
             if int(self.race_time * 6) % 2 == 0:
-                pf.draw_text(s, 'OFF ROAD', WIDTH // 2, HEIGHT - 42,
+                pf.draw_text(s, 'OFF ROAD', BASE_WIDTH // 2, BASE_HEIGHT - 42,
                              (255, 120, 120), 1, center=True)
 
 

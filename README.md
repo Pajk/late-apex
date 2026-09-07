@@ -180,10 +180,31 @@ engine note follows the revs.
 The game renders internally at 320×200 and scales the whole frame up, which is
 what keeps the pixels chunky at any window size.
 
+## Hi-res mode
+
+```bash
+./run.sh --hires        # world at 960x600
+./run.sh --scale 2      # or 1-4; 1 is the default
+```
+
+![Hi-res](docs/hires.png)
+
+The road renderer was already resolution-independent — it takes the frame size
+as a parameter — so this is mostly a matter of what *isn't*. The world renders
+at `320x200 * scale`, while the HUD and menus stay on the 320x200 grid on their
+own layer and are scaled up as one piece, which keeps the bitmap font exactly
+square instead of re-rasterising it at an awkward size. Sprites are still drawn
+at 1x, so you get a crisp road under chunky pixel art — roughly what the Super
+Scaler arcade boards looked like.
+
+It costs about 626 fps at 960x600 versus ~1400 at 320x200 — either way there is
+an order of magnitude of headroom over 60fps. The window stays the same size; only
+the detail in it changes. Default is unchanged at 320x200.
+
 ## Tests
 
 ```bash
-./test.sh                  # everything, about 6 seconds
+./test.sh                  # everything, about 8 seconds
 ./test.sh geometry rules   # just those suites
 ```
 
@@ -194,6 +215,7 @@ what keeps the pixels chunky at any window size.
 | `render` | All five circuits draw, frames are not blank, speed leaves 60fps headroom |
 | `ui` | Title → circuits → garage → race → pause → results → name entry → score table, and that scores persist |
 | `balance` | An autopilot races every car on every circuit; all 25 combinations must finish with time in hand, and a sloppy run must still be able to fail |
+| `hires` | The optional hi-res mode, in a subprocess since the scale is fixed at import time: default stays 320x200, the HUD keeps its own grid, the window does not change size |
 
 The suite runs headless and writes contact sheets to `tests/output/`, so a run
 can be eyeballed as well as asserted on. It redirects the high score file into
@@ -210,6 +232,7 @@ game/
   render.py           the pseudo-3D road renderer
   track.py            road geometry and the five themed circuits
   cars.py             the garage and its handling numbers
+  config.py           render scale, read once at import time
   autopilot.py        the driver used by the demo, the tests and capture
   audio.py            music, engine crossfades, effects
   scores.py           persistent high score tables

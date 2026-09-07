@@ -13,7 +13,7 @@ import time
 
 from tests import harness
 
-SUITES = ['geometry', 'rules', 'render', 'ui', 'balance']
+SUITES = ['geometry', 'rules', 'render', 'ui', 'balance', 'hires']
 
 
 def main(argv):

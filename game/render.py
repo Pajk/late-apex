@@ -9,9 +9,12 @@ import os
 
 import pygame
 
+from .config import BASE_HEIGHT, BASE_WIDTH, HIRES, SCALE
 from .track import SEGMENT_LENGTH, ROAD_WIDTH, LANES
 
-WIDTH, HEIGHT = 320, 200
+# The world renders at this size; the HUD keeps to the BASE_* grid and is
+# scaled up as one piece so its pixels stay square.
+WIDTH, HEIGHT = BASE_WIDTH * SCALE, BASE_HEIGHT * SCALE
 FIELD_OF_VIEW = 100
 CAMERA_HEIGHT = 1000
 DRAW_DISTANCE = 210
@@ -55,6 +58,7 @@ class Assets:
         self.dir = os.path.join(root, 'assets', 'sprites')
         self.raw = {}
         self._cache = {}
+        self._backdrops = {}
         for fn in os.listdir(self.dir):
             if fn.endswith('.png'):
                 img = pygame.image.load(os.path.join(self.dir, fn))
@@ -62,6 +66,18 @@ class Assets:
 
     def get(self, name):
         return self.raw[name]
+
+    def backdrop(self, name):
+        """A parallax layer at the current render scale (cached)."""
+        if not HIRES:
+            return self.raw[name]
+        hit = self._backdrops.get(name)
+        if hit is None:
+            img = self.raw[name]
+            hit = pygame.transform.scale(
+                img, (img.get_width() * SCALE, img.get_height() * SCALE))
+            self._backdrops[name] = hit
+        return hit
 
     def scaled(self, name, w, h, fog_i=0, fog_color=(0, 0, 0)):
         w = max(1, int(w))
@@ -165,9 +181,9 @@ class Renderer:
         s = self.surface
         a = self.assets
         bg = theme['bg']
-        sky = a.get('bg_%s_sky' % bg)
-        far = a.get('bg_%s_far' % bg)
-        near = a.get('bg_%s_near' % bg)
+        sky = a.backdrop('bg_%s_sky' % bg)
+        far = a.backdrop('bg_%s_far' % bg)
+        near = a.backdrop('bg_%s_near' % bg)
 
         base = int(horizon)
         s.fill(theme['fog_color'])
@@ -302,7 +318,7 @@ class Renderer:
                 s.blit(player_sprite[0], player_sprite[1])
 
     def _blit_sprite(self, img, name, cx, base_y, w, h, clip, fog_i, fog_color):
-        if w < 1 or h < 1 or w > 2200:
+        if w < 1 or h < 1 or w > 2200 * SCALE:
             return
         x = cx - w / 2
         y = base_y - h

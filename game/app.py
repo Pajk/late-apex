@@ -13,6 +13,7 @@ from . import cars as garage
 from . import track as tracks
 from .audio import Audio
 from .race import Race, fmt, MAX_SPEED
+from .config import BASE_HEIGHT, BASE_WIDTH, HIRES, SCALE
 from .render import Assets, Renderer, WIDTH, HEIGHT
 from .scores import Scores, ALPHABET, NAME_LEN, TABLE_SIZE
 
@@ -33,10 +34,10 @@ class App:
         pygame.init()
         self.root = root
         self.audio = Audio(root)
-        self.scale = BASE_SCALE
+        self.scale = max(1, BASE_SCALE // SCALE)
         self.fullscreen = False
         self.window = pygame.display.set_mode(
-            (WIDTH * self.scale, HEIGHT * self.scale))
+            (BASE_WIDTH * BASE_SCALE, BASE_HEIGHT * BASE_SCALE))
         pygame.display.set_caption(TITLE)
         try:
             icon = pygame.image.load(
@@ -45,6 +46,13 @@ class App:
         except pygame.error:
             pass
         self.screen = pygame.Surface((WIDTH, HEIGHT)).convert()
+        # In hi-res mode the HUD and menus keep to the 320x200 grid on their
+        # own layer, scaled up as one piece at present() time, so the bitmap
+        # font stays exactly square instead of being re-rasterised.
+        self.ui = (pygame.Surface((BASE_WIDTH, BASE_HEIGHT), pygame.SRCALPHA)
+                   if HIRES else self.screen)
+        self._ui_scaled = (pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                           if HIRES else None)
         self.assets = Assets(root)
         self.renderer = Renderer(self.assets)
         self.scores = Scores(tracks.TRACK_SPECS)
@@ -125,9 +133,12 @@ class App:
             self.window = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
             self.window = pygame.display.set_mode(
-                (WIDTH * BASE_SCALE, HEIGHT * BASE_SCALE))
+                (BASE_WIDTH * BASE_SCALE, BASE_HEIGHT * BASE_SCALE))
 
     def present(self):
+        if self.ui is not self.screen:
+            pygame.transform.scale(self.ui, (WIDTH, HEIGHT), self._ui_scaled)
+            self.screen.blit(self._ui_scaled, (0, 0))
         ww, wh = self.window.get_size()
         k = min(ww / WIDTH, wh / HEIGHT)
         k = max(1, int(k)) if k >= 1 else k
@@ -412,13 +423,16 @@ class App:
     # -- draw -----------------------------------------------------------
     def draw(self):
         s = self.screen
+        u = self.ui
+        if u is not s:
+            u.fill((0, 0, 0, 0))
         if self.state == S_RACE:
-            self.race.draw(s)
+            self.race.draw(s, u)
         elif self.state == S_PAUSE:
-            self.race.draw(s)
-            self.overlay(s, 190)
-            self.panel_title(s, 'PAUSED', 60)
-            self.menu_lines(s, 92, [
+            self.race.draw(s, u)
+            self.overlay(u, 190)
+            self.panel_title(u, 'PAUSED', 60)
+            self.menu_lines(u, 92, [
                 ('ENTER / ESC', 'RESUME'),
                 ('R', 'RESTART RACE'),
                 ('X', 'QUIT TO CIRCUITS'),
@@ -428,6 +442,7 @@ class App:
                 self._demo_world(s)
             else:
                 s.fill((12, 12, 24))
+            s = u
             if self.state == S_TITLE:
                 self.draw_title(s)
             elif self.state == S_SELECT:
@@ -444,10 +459,10 @@ class App:
                 self.draw_help(s)
 
         if self.fade > 0.001:
-            self.overlay(s, int(255 * self.fade), (0, 0, 0))
+            self.overlay(u, int(255 * self.fade), (0, 0, 0))
         if self.show_fps:
-            pf.draw_text(s, '%d FPS' % int(self.clock.get_fps()), 2, HEIGHT - 8,
-                         (120, 255, 120), 1)
+            pf.draw_text(u, '%d FPS' % int(self.clock.get_fps()), 2,
+                         BASE_HEIGHT - 8, (120, 255, 120), 1)
 
     def _demo_world(self, s):
         d = self.demo
@@ -466,7 +481,7 @@ class App:
 
     # -- widgets --------------------------------------------------------
     def overlay(self, s, alpha, colour=(6, 8, 20)):
-        o = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        o = pygame.Surface(s.get_size(), pygame.SRCALPHA)
         o.fill(colour + (alpha,))
         s.blit(o, (0, 0))
 
@@ -477,12 +492,12 @@ class App:
         pygame.draw.rect(s, border, (x, y, w, h), 1)
 
     def checker(self, s, y, h=4, phase=0):
-        for i in range(0, WIDTH, h):
+        for i in range(0, s.get_width(), h):
             c = (240, 240, 240) if ((i // h) + phase) % 2 == 0 else (24, 24, 30)
             s.fill(c, (i, y, h, h))
 
     def panel_title(self, s, text, y, colour=ACCENT):
-        pf.draw_text(s, text, WIDTH // 2, y, colour, 2, center=True,
+        pf.draw_text(s, text, BASE_WIDTH // 2, y, colour, 2, center=True,
                      shadow=(90, 20, 30))
 
     def menu_lines(self, s, y, rows, key_col=ACCENT, val_col=INK):
@@ -496,50 +511,50 @@ class App:
         self.overlay(s, 120)
         self.checker(s, 22, 4, int(self.blink * 6) % 2)
         y = 34
-        pf.draw_text(s, 'LATE', WIDTH // 2, y, (255, 236, 120), 5,
+        pf.draw_text(s, 'LATE', BASE_WIDTH // 2, y, (255, 236, 120), 5,
                      center=True, shadow=(150, 24, 40))
-        pf.draw_text(s, 'APEX', WIDTH // 2, y + 40, (255, 236, 120), 5,
+        pf.draw_text(s, 'APEX', BASE_WIDTH // 2, y + 40, (255, 236, 120), 5,
                      center=True, shadow=(150, 24, 40))
         self.checker(s, y + 78, 4, int(self.blink * 6) % 2 + 1)
-        pf.draw_text(s, 'FIVE CIRCUITS - ONE CLOCK', WIDTH // 2, y + 90, INK, 1,
+        pf.draw_text(s, 'FIVE CIRCUITS - ONE CLOCK', BASE_WIDTH // 2, y + 90, INK, 1,
                      center=True)
         if int(self.blink * 2) % 2 == 0:
-            pf.draw_text(s, 'PRESS ENTER TO RACE', WIDTH // 2, 158, ACCENT2, 2,
+            pf.draw_text(s, 'PRESS ENTER TO RACE', BASE_WIDTH // 2, 158, ACCENT2, 2,
                          center=True, shadow=(60, 10, 20))
-        pf.draw_text(s, 'H - HIGH SCORES', 5, HEIGHT - 9, DIM, 1)
-        pf.draw_text(s, '(C) 198X', WIDTH - 5, HEIGHT - 9, DIM, 1, right=True)
+        pf.draw_text(s, 'H - HIGH SCORES', 5, BASE_HEIGHT - 9, DIM, 1)
+        pf.draw_text(s, '(C) 198X', BASE_WIDTH - 5, BASE_HEIGHT - 9, DIM, 1, right=True)
 
     def draw_select(self, s):
         self.overlay(s, 175)
         self.checker(s, 0, 3, int(self.blink * 6) % 2)
-        pf.draw_text(s, 'SELECT CIRCUIT', WIDTH // 2, 8, ACCENT, 2,
+        pf.draw_text(s, 'SELECT CIRCUIT', BASE_WIDTH // 2, 8, ACCENT, 2,
                      center=True, shadow=(90, 20, 30))
         y = 30
         for i, spec in enumerate(tracks.TRACK_SPECS):
             th = tracks.THEMES[spec['theme']]
             on = i == self.sel
             if on:
-                self.box(s, 8, y - 3, WIDTH - 16, 22, 190, ACCENT)
+                self.box(s, 8, y - 3, BASE_WIDTH - 16, 22, 190, ACCENT)
             col = ACCENT if on else INK
             marker = '>' if on and int(self.blink * 3) % 2 == 0 else ' '
             pf.draw_text(s, '%s%s' % (marker, spec['name']), 14, y, col, 1)
             stars = '*' * tracks.DIFFICULTY[spec['key']]
-            pf.draw_text(s, stars, WIDTH - 14, y, ACCENT2, 1, right=True)
+            pf.draw_text(s, stars, BASE_WIDTH - 14, y, ACCENT2, 1, right=True)
             best = self.scores.best(spec['key'], 'race')
             pf.draw_text(s, th['blurb'], 20, y + 9, DIM, 1)
-            pf.draw_text(s, fmt(best), WIDTH - 14, y + 9, (150, 200, 255), 1,
+            pf.draw_text(s, fmt(best), BASE_WIDTH - 14, y + 9, (150, 200, 255), 1,
                          right=True)
             y += 26
         pf.draw_text(s, 'ENTER RACE   H SCORES   I CONTROLS   ESC BACK',
-                     WIDTH // 2, HEIGHT - 10, DIM, 1, center=True)
+                     BASE_WIDTH // 2, BASE_HEIGHT - 10, DIM, 1, center=True)
 
     def draw_car_select(self, s):
         self.overlay(s, 200)
         self.checker(s, 0, 3, int(self.blink * 6) % 2)
         car = garage.CARS[self.car_sel]
-        pf.draw_text(s, 'CHOOSE YOUR CAR', WIDTH // 2, 8, ACCENT, 2,
+        pf.draw_text(s, 'CHOOSE YOUR CAR', BASE_WIDTH // 2, 8, ACCENT, 2,
                      center=True, shadow=(90, 20, 30))
-        pf.draw_text(s, self.spec(self.sel)['name'], WIDTH // 2, 26, DIM, 1,
+        pf.draw_text(s, self.spec(self.sel)['name'], BASE_WIDTH // 2, 26, DIM, 1,
                      center=True)
 
         # the car itself, on a little stage
@@ -551,17 +566,17 @@ class App:
             w = int(img.get_width() * h / img.get_height())
         shown = self.assets.scaled('car_%s_2n' % car['key'], w, h)
         bob = math.sin(self.blink * 2.4) * 1.5
-        s.fill((22, 24, 40), (WIDTH // 2 - 70, 118, 140, 3))
-        s.blit(shown, (WIDTH // 2 - w // 2, int(118 - h + bob)))
+        s.fill((22, 24, 40), (BASE_WIDTH // 2 - 70, 118, 140, 3))
+        s.blit(shown, (BASE_WIDTH // 2 - w // 2, int(118 - h + bob)))
 
         pf.draw_text(s, '<', 18, 74, ACCENT if int(self.blink * 3) % 2 == 0
                      else DIM, 2)
-        pf.draw_text(s, '>', WIDTH - 28, 74, ACCENT
+        pf.draw_text(s, '>', BASE_WIDTH - 28, 74, ACCENT
                      if int(self.blink * 3) % 2 == 0 else DIM, 2)
 
-        pf.draw_text(s, car['name'], WIDTH // 2, 124, ACCENT, 2, center=True,
+        pf.draw_text(s, car['name'], BASE_WIDTH // 2, 124, ACCENT, 2, center=True,
                      shadow=(60, 12, 24))
-        pf.draw_text(s, car['blurb'], WIDTH // 2, 140, INK, 1, center=True)
+        pf.draw_text(s, car['blurb'], BASE_WIDTH // 2, 140, INK, 1, center=True)
 
         # stat bars
         x0, y = 92, 152
@@ -578,21 +593,21 @@ class App:
             y += 9
 
         for i in range(len(garage.CARS)):
-            x = WIDTH // 2 - len(garage.CARS) * 5 + i * 10
+            x = BASE_WIDTH // 2 - len(garage.CARS) * 5 + i * 10
             s.fill(ACCENT if i == self.car_sel else (70, 74, 96),
-                   (x, HEIGHT - 19, 6, 3))
+                   (x, BASE_HEIGHT - 19, 6, 3))
         pf.draw_text(s, 'LEFT/RIGHT CHANGE   ENTER GO   ESC BACK',
-                     WIDTH // 2, HEIGHT - 10, DIM, 1, center=True)
+                     BASE_WIDTH // 2, BASE_HEIGHT - 10, DIM, 1, center=True)
 
     def draw_result(self, s):
         self.overlay(s, 205)
         r = self.result
         ok = r['completed']
         self.checker(s, 0, 3, int(self.blink * 6) % 2)
-        pf.draw_text(s, 'RACE COMPLETE' if ok else 'OUT OF TIME', WIDTH // 2,
+        pf.draw_text(s, 'RACE COMPLETE' if ok else 'OUT OF TIME', BASE_WIDTH // 2,
                      12, (140, 255, 160) if ok else ACCENT2, 2, center=True,
                      shadow=(60, 12, 24))
-        pf.draw_text(s, r['name'], WIDTH // 2, 30, INK, 1, center=True)
+        pf.draw_text(s, r['name'], BASE_WIDTH // 2, 30, INK, 1, center=True)
         y = 46
         for i, lt in enumerate(r['laps']):
             best = (r['lap_time'] is not None and abs(lt - r['lap_time']) < 1e-6)
@@ -608,7 +623,7 @@ class App:
             y += 18
         pf.draw_text(s, 'FINISHED %d%s OF %d' % (
             r['position'], _ordinal(r['position']),
-            self.get_track(r['key']).rivals + 1), WIDTH // 2, y, INK, 1,
+            self.get_track(r['key']).rivals + 1), BASE_WIDTH // 2, y, INK, 1,
             center=True)
         y += 16
         if r['qualifies']:
@@ -618,15 +633,15 @@ class App:
             if r['lap_pos']:
                 what.append('LAP #%d' % r['lap_pos'])
             if int(self.blink * 3) % 2 == 0:
-                pf.draw_text(s, 'NEW RECORD - ' + '  '.join(what), WIDTH // 2,
+                pf.draw_text(s, 'NEW RECORD - ' + '  '.join(what), BASE_WIDTH // 2,
                              y, ACCENT2, 1, center=True)
-        pf.draw_text(s, 'PRESS ENTER', WIDTH // 2, HEIGHT - 12, DIM, 1,
+        pf.draw_text(s, 'PRESS ENTER', BASE_WIDTH // 2, BASE_HEIGHT - 12, DIM, 1,
                      center=True)
 
     def draw_name(self, s):
         self.overlay(s, 215)
         self.checker(s, 0, 3, int(self.blink * 6) % 2)
-        pf.draw_text(s, 'NEW HIGH SCORE', WIDTH // 2, 22, ACCENT, 2,
+        pf.draw_text(s, 'NEW HIGH SCORE', BASE_WIDTH // 2, 22, ACCENT, 2,
                      center=True, shadow=(90, 20, 30))
         r = self.result
         line = []
@@ -636,12 +651,12 @@ class App:
             line.append('LAP %s  #%d' % (fmt(r['lap_time']), r['lap_pos']))
         y = 46
         for t in line:
-            pf.draw_text(s, t, WIDTH // 2, y, INK, 1, center=True)
+            pf.draw_text(s, t, BASE_WIDTH // 2, y, INK, 1, center=True)
             y += 11
-        pf.draw_text(s, 'ENTER YOUR INITIALS', WIDTH // 2, 76, DIM, 1,
+        pf.draw_text(s, 'ENTER YOUR INITIALS', BASE_WIDTH // 2, 76, DIM, 1,
                      center=True)
         total_w = NAME_LEN * 34
-        x0 = WIDTH // 2 - total_w // 2
+        x0 = BASE_WIDTH // 2 - total_w // 2
         for i in range(NAME_LEN):
             x = x0 + i * 34
             sel = i == self.name_pos
@@ -652,8 +667,8 @@ class App:
             if sel and int(self.blink * 3) % 2 == 0:
                 pf.draw_text(s, '^', x + 14, 130, ACCENT, 1, center=True)
         pf.draw_text(s, 'UP/DOWN LETTER   LEFT/RIGHT MOVE   ENTER OK',
-                     WIDTH // 2, HEIGHT - 22, DIM, 1, center=True)
-        pf.draw_text(s, 'OR JUST TYPE', WIDTH // 2, HEIGHT - 12, DIM, 1,
+                     BASE_WIDTH // 2, BASE_HEIGHT - 22, DIM, 1, center=True)
+        pf.draw_text(s, 'OR JUST TYPE', BASE_WIDTH // 2, BASE_HEIGHT - 12, DIM, 1,
                      center=True)
 
     def draw_scores(self, s):
@@ -661,11 +676,11 @@ class App:
         self.checker(s, 0, 3, int(self.blink * 6) % 2)
         spec = self.spec(self.score_track)
         kind = 'race' if self.score_kind == 0 else 'lap'
-        pf.draw_text(s, 'HALL OF FAME', WIDTH // 2, 10, ACCENT, 2, center=True,
+        pf.draw_text(s, 'HALL OF FAME', BASE_WIDTH // 2, 10, ACCENT, 2, center=True,
                      shadow=(90, 20, 30))
-        pf.draw_text(s, '< %s >' % spec['name'], WIDTH // 2, 28, INK, 1,
+        pf.draw_text(s, '< %s >' % spec['name'], BASE_WIDTH // 2, 28, INK, 1,
                      center=True)
-        pf.draw_text(s, 'BEST %s TIMES' % kind.upper(), WIDTH // 2, 39,
+        pf.draw_text(s, 'BEST %s TIMES' % kind.upper(), BASE_WIDTH // 2, 39,
                      (150, 200, 255), 1, center=True)
         rows = self.scores.table(spec['key'], kind)
         y = 52
@@ -675,14 +690,14 @@ class App:
             pf.draw_text(s, row['name'], 92, y, col, 1)
             if row.get('car'):
                 pf.draw_text(s, row['car'], 132, y, (130, 140, 170), 1)
-            pf.draw_text(s, fmt(row['time']), WIDTH - 84, y, col, 1, right=True)
+            pf.draw_text(s, fmt(row['time']), BASE_WIDTH - 84, y, col, 1, right=True)
             y += 13
         pf.draw_text(s, 'LEFT/RIGHT CIRCUIT   UP/DOWN RACE-LAP   ESC BACK',
-                     WIDTH // 2, HEIGHT - 10, DIM, 1, center=True)
+                     BASE_WIDTH // 2, BASE_HEIGHT - 10, DIM, 1, center=True)
 
     def draw_help(self, s):
         self.overlay(s, 215)
-        pf.draw_text(s, 'CONTROLS', WIDTH // 2, 14, ACCENT, 2, center=True,
+        pf.draw_text(s, 'CONTROLS', BASE_WIDTH // 2, 14, ACCENT, 2, center=True,
                      shadow=(90, 20, 30))
         self.menu_lines(s, 40, [
             ('UP / W', 'ACCELERATE'),
@@ -694,8 +709,8 @@ class App:
             ('F1', 'FULLSCREEN'),
         ])
         pf.draw_text(s, 'BEAT THE CLOCK - EVERY LAP BUYS MORE TIME',
-                     WIDTH // 2, 140, (150, 200, 255), 1, center=True)
-        pf.draw_text(s, 'PRESS ANY KEY', WIDTH // 2, HEIGHT - 12, DIM, 1,
+                     BASE_WIDTH // 2, 140, (150, 200, 255), 1, center=True)
+        pf.draw_text(s, 'PRESS ANY KEY', BASE_WIDTH // 2, BASE_HEIGHT - 12, DIM, 1,
                      center=True)
 
 
