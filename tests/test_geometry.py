@@ -1,0 +1,137 @@
+"""Sprite placement and track geometry invariants.
+
+This is the test that would have caught the start gantry sitting with one leg
+in the middle of the road: roadside sprites anchor at their inner edge, but a
+sprite at offset exactly 0 must be centred instead.
+"""
+
+from tests import harness
+
+
+def run():
+    c = harness.Checks('geometry')
+    from game.render import Assets, OBJECT_SCALE, sprite_anchor
+    from game.track import ROAD_WIDTH, SEGMENT_LENGTH
+    from game import track as T
+
+    assets = Assets(harness.ROOT)
+
+    def span(name, scale, offset):
+        """Left/right edge in road half-widths (the road spans -1.0..+1.0).
+
+        Deliberately calls the game's own sprite_anchor rather than repeating
+        the arithmetic, so a regression in the real code fails this test.
+        """
+        w = assets.get(name).get_width() * scale * OBJECT_SCALE / ROAD_WIDTH
+        centre = sprite_anchor(offset, w)
+        return centre - w / 2, centre + w / 2, w
+
+    # -- centred sprites stay centred ----------------------------------
+    left, right, width = span('obj_gantry', 2.2, 0.0)
+    c.check(abs(left + right) < 1e-9,
+            'start gantry is not centred on the road (spans %.2f..%.2f)'
+            % (left, right))
+    c.check(left < -1.0 and right > 1.0,
+            'start gantry legs are not clear of the road '
+            '(spans %.2f..%.2f, road edges are -1.0/+1.0)' % (left, right))
+    c.note('gantry %.2f half-widths wide, legs at %+.2f / %+.2f'
+           % (width, left, right))
+
+    # -- roadside sprites anchor at their inner edge -------------------
+    for name, scale, offset in (('obj_tree_oak', 2.4, 1.5),
+                                ('obj_tree_oak', 2.4, -1.5),
+                                ('obj_streetlamp', 1.3, 1.16),
+                                ('obj_streetlamp', 1.3, -1.16)):
+        left, right, _ = span(name, scale, offset)
+        inner = left if offset > 0 else right
+        c.check(abs(inner - offset) < 1e-9,
+                '%s at offset %+.2f should touch %+.2f, got %+.2f'
+                % (name, offset, offset, inner))
+
+    # -- nothing collidable is placed on the racing line ---------------
+    for spec in T.TRACK_SPECS:
+        track = T.load(spec['key'])
+        intruders = []
+        for seg in track.segments:
+            for offset, name, scale, collides in seg.sprites:
+                if not collides:
+                    continue
+                left, right, _ = span(name, scale, offset)
+                if left < 1.0 and right > -1.0:
+                    intruders.append((seg.index, name, offset))
+        c.check(not intruders,
+                '%s has %d collidable objects overlapping the road, e.g. %s'
+                % (spec['name'], len(intruders), intruders[:3]))
+
+    # -- the lap must actually join up ---------------------------------
+    for spec in T.TRACK_SPECS:
+        track = T.load(spec['key'])
+        first, last = track.segments[0], track.segments[-1]
+        c.check(abs(first.p1.wy) < 1e-6 and abs(last.p2.wy) < 1e-6,
+                '%s does not return to y=0 at the finish line '
+                '(start %.2f, end %.2f)'
+                % (spec['name'], first.p1.wy, last.p2.wy))
+        c.check(abs(last.curve) < 0.01,
+                '%s still curves at the finish line (%.3f)'
+                % (spec['name'], last.curve))
+        c.check(track.length == len(track.segments) * SEGMENT_LENGTH,
+                '%s length does not match its segment count' % spec['name'])
+
+    # -- and the same thing end to end, through the real renderer ------
+    _check_gantry_pixels(c)
+
+    return c.report()
+
+
+def _check_gantry_pixels(c):
+    """Render the approach to the start gantry and measure where it actually
+    lands on screen, by diffing against the same frame with the gantry taken
+    out. Catches the anchoring being mis-wired in the render path itself, not
+    just in the arithmetic."""
+    import random
+    import pygame
+    from game.render import Assets, Renderer, WIDTH, HEIGHT
+    from game.race import Race
+    from game import track as T
+    from game.scores import Scores
+
+    renderer = Renderer(Assets(harness.ROOT))
+    track = T.load('country')
+    race = Race(track, renderer, harness.silent_audio(),
+                Scores(T.TRACK_SPECS), random.Random(1))
+    race.state = Race.STATE_RACING
+
+    gantry_seg = next(s for s in track.segments
+                      if any(sp[1] == 'obj_gantry' for sp in s.sprites))
+    race.player.z = (gantry_seg.index * 200) - 5000
+    race.player.x = 0.0
+    race.player.speed = 0.0
+    race.update(1 / 60.0, {'left': 0, 'right': 0, 'accel': 0, 'brake': 0})
+
+    surface = pygame.Surface((WIDTH, HEIGHT)).convert()
+    race.draw(surface)
+    with_gantry = surface.copy()
+    road_centre = gantry_seg.p1.sx          # projected centre of that segment
+
+    stashed = gantry_seg.sprites
+    gantry_seg.sprites = [s for s in stashed if s[1] != 'obj_gantry']
+    race.draw(surface)
+    without = surface.copy()
+    gantry_seg.sprites = stashed
+
+    xs = [x for x in range(WIDTH) for y in range(28, 120)
+          if with_gantry.get_at((x, y)) != without.get_at((x, y))]
+    if not c.check(len(xs) > 40,
+                   'the gantry did not render at all (%d pixels differed)'
+                   % len(xs)):
+        race.clear()
+        return
+    left, right = min(xs), max(xs)
+    centre = (left + right) / 2.0
+    c.note('gantry drawn at x %d..%d, centre %.1f, road centre %.1f'
+           % (left, right, centre, road_centre))
+    c.check(abs(centre - road_centre) <= 2.0,
+            'the rendered gantry is off-centre by %.1f px (drawn centre %.1f, '
+            'road centre %.1f)' % (abs(centre - road_centre), centre,
+                                   road_centre))
+    race.clear()
