@@ -77,10 +77,55 @@ def run():
         c.check(track.length == len(track.segments) * SEGMENT_LENGTH,
                 '%s length does not match its segment count' % spec['name'])
 
+    # -- the HUD must not swallow the player's car ---------------------
+    _check_car_clears_hud(c)
+
     # -- and the same thing end to end, through the real renderer ------
     _check_gantry_pixels(c)
 
     return c.report()
+
+
+def _check_car_clears_hud(c):
+    """The instrument panel is drawn over the world, so the car has to sit
+    above it. It used to be placed against the bottom of the screen, which put
+    a third of every car - wheels, bumper and plate - behind the panel."""
+    import random
+    from game.render import Assets, Renderer, HEIGHT
+    from game.race import Race, MAX_SPEED, HUD_BOTTOM, HUD_TOP
+    from game import track as T, cars as garage
+    from game.scores import Scores
+
+    renderer = Renderer(Assets(harness.ROOT))
+    panel_top = HEIGHT - HUD_BOTTOM
+    for car in garage.CARS:
+        race = Race(T.load('country'), renderer, harness.silent_audio(),
+                    Scores(T.TRACK_SPECS), random.Random(3), car=car)
+        race.state = Race.STATE_RACING
+        race.player.speed = MAX_SPEED * 0.8
+        for _ in range(120):          # let the bounce reach its extremes
+            race.update(1 / 60.0, {'left': False, 'right': False,
+                                   'accel': True, 'brake': False})
+        img, (_, top) = race._player_sprite(0)
+        bottom = top + img.get_height()
+        hidden = max(0, bottom - panel_top)
+        height = img.get_height()
+        # Absolute limits on purpose: deriving the tolerance from CAR_SINK
+        # would let the assertion drift along with the very value it guards.
+        c.check(hidden <= 10,
+                '%s is %dpx behind the instrument panel (10px is the limit)'
+                % (car['name'], hidden))
+        c.check(hidden <= height * 0.15,
+                '%s has %.0f%% of its body behind the panel'
+                % (car['name'], 100.0 * hidden / height))
+        c.check(top > HUD_TOP,
+                '%s reaches up into the top HUD bar (y=%d)'
+                % (car['name'], top))
+        c.check(hidden >= 0,
+                '%s floats above the panel with a visible gap' % car['name'])
+        race.clear()
+    c.note('all %d cars sit clear of the instrument panel'
+           % len(garage.CARS))
 
 
 def _check_gantry_pixels(c):

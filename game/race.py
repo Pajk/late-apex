@@ -22,8 +22,13 @@ OFF_ROAD_LIMIT = MAX_SPEED / 3.6
 CENTRIFUGAL = 0.46
 KMH_PER_UNIT = 310.0 / MAX_SPEED
 GEARS = 5
-PLAYER_W = 0.32
-INK = (236, 240, 250)                            # car width in road half-widths
+PLAYER_W = 0.32       # car width in road half-widths
+INK = (236, 240, 250)
+# HUD geometry on the 320x200 design grid. The player car is placed against
+# HUD_BOTTOM so the instrument panel cannot swallow its wheels.
+HUD_TOP = 24
+HUD_BOTTOM = 28
+CAR_SINK = 4          # how far the car's bottom tucks behind the panel
 TURBO_TIME = 2.6
 TURBO_BOOST = 1.22
 
@@ -532,7 +537,8 @@ class Race:
         if p.offroad:
             bob += math.sin(p.bounce * 3.1) * 2.2 * SCALE
         x = WIDTH / 2 - w / 2 + p.steer * 3 * SCALE
-        y = HEIGHT - h - 6 * SCALE + bob + shake_y
+        y = HEIGHT - (HUD_BOTTOM - CAR_SINK) * SCALE - h + bob \
+            + shake_y
         return surf, (int(x), int(y))
 
     def _draw_particles(self, s):
@@ -608,7 +614,7 @@ class Race:
                      right=True)
 
         # bottom instrument strip
-        bh = 28
+        bh = HUD_BOTTOM
         base = pygame.Surface((BASE_WIDTH, bh), pygame.SRCALPHA)
         base.fill((10, 10, 22, 172))
         s.blit(base, (0, BASE_HEIGHT - bh))
