@@ -9,8 +9,8 @@ VENV=".venv"
 if [ ! -x "$VENV/bin/python" ]; then
     echo "Creating virtualenv..."
     "$PY" -m venv "$VENV"
-    "$VENV/bin/pip" install --upgrade pip >/dev/null
-    "$VENV/bin/pip" install -r requirements.txt
+    "$VENV/bin/python" -m pip install --upgrade pip >/dev/null
+    "$VENV/bin/python" -m pip install -r requirements.txt
 fi
 
 if [ ! -f assets/sprites/car_player_2n.png ] || [ ! -f assets/audio/music_menu.wav ]; then
