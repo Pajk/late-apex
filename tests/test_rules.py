@@ -296,4 +296,67 @@ def run():
     c.note('%d cars, all with 10 frames and a full engine bank'
            % len(garage2.CARS))
 
+    # -- every themed track has a native animal hazard, sprites included --
+    from game.track import THEMES as _THEMES
+    for tkey in ('city', 'country', 'desert', 'winter', 'summer'):
+        spec = _THEMES[tkey]['animal']
+        race = _race(key=tkey)
+        c.check(bool(race.critters),
+                '%s spawned no roadside animals' % tkey)
+        for critter in race.critters:
+            c.check(critter.name == spec['name'],
+                    '%s animal name mismatch (%s vs %s)'
+                    % (tkey, critter.name, spec['name']))
+            for frame in (0, 1):
+                sprite = 'obj_animal_%s_%d' % (spec['key'], frame)
+                c.check(sprite in race.r.assets.raw,
+                        '%s is missing sprite %s' % (spec['name'], sprite))
+        race.clear()
+    c.note('%d themed tracks each have a native animal hazard' % len(_THEMES))
+
+    # -- animals amble back and forth across the road -------------------
+    race = _race(key='desert')
+    race.state = Race.STATE_RACING
+    before = [cr.offset for cr in race.critters]
+    for _ in range(420):                 # 7 simulated seconds
+        race.update(1 / 60.0, COAST)
+    after = [cr.offset for cr in race.critters]
+    c.check(any(abs(a - b) > 0.05 for a, b in zip(before, after)),
+            'roadside animals never moved across the road')
+    race.clear()
+
+    # -- harder difficulty means more, faster animals --------------------
+    easy_race = _race(key='desert', level=levels.get('easy'))
+    hard_race = _race(key='desert', level=levels.get('hard'))
+    c.check(len(hard_race.critters) >= len(easy_race.critters),
+            'hard does not put at least as many animals on the road as easy '
+            '(%d vs %d)' % (len(hard_race.critters), len(easy_race.critters)))
+    c.check(hard_race.critters[0].speed > easy_race.critters[0].speed,
+            'hard animals do not cross faster than easy ones (%.2f vs %.2f)'
+            % (hard_race.critters[0].speed, easy_race.critters[0].speed))
+    c.note('easy %d animals @ %.2f, hard %d animals @ %.2f'
+           % (len(easy_race.critters), easy_race.critters[0].speed,
+              len(hard_race.critters), hard_race.critters[0].speed))
+    easy_race.clear()
+    hard_race.clear()
+
+    # -- hitting an animal costs speed and names it in the HUD -----------
+    race = _race(key='desert')
+    race.state = Race.STATE_RACING
+    critter = race.critters[0]
+    critter.pause = 0.0
+    critter.hit = False
+    race.player.z = critter.z
+    race.player.x = critter.offset
+    race.player.speed = MAX_SPEED * 0.7
+    before_speed = race.player.speed
+    race.update(1 / 60.0, COAST)
+    c.check(race.player.speed < before_speed,
+            'hitting an animal did not cost any speed')
+    c.check(any(m[0] == 'HIT A %s!' % critter.name for m in race.messages),
+            'hitting an animal did not raise a named HUD message')
+    c.check(critter.hit, 'the animal is not marked as hit to avoid a double '
+                        'penalty the same crossing')
+    race.clear()
+
     return c.report()

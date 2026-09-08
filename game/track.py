@@ -34,8 +34,8 @@ class Point:
 
 
 class Segment:
-    __slots__ = ('index', 'p1', 'p2', 'curve', 'sprites', 'cars', 'dark',
-                 'looped', 'fog_i', 'clip', 'special')
+    __slots__ = ('index', 'p1', 'p2', 'curve', 'sprites', 'cars', 'animals',
+                 'dark', 'looped', 'fog_i', 'clip', 'special')
 
     def __init__(self, index, y1, y2, curve):
         self.index = index
@@ -44,6 +44,7 @@ class Segment:
         self.curve = curve
         self.sprites = []      # (offset, name, scale, collides)
         self.cars = []
+        self.animals = []      # wildlife wandering across the road
         self.dark = (index // RUMBLE_LENGTH) % 2 == 1
         self.looped = False
         self.fog_i = 0
@@ -93,6 +94,8 @@ THEMES = {
         'close': [('obj_cone', 0.6, 1.05, 1.16),
                   ('obj_tyrewall', 1.0, 1.06, 1.14)],
         'density': 0.40,
+        'animal': dict(key='dog', name='STRAY DOG', body=0.14,
+                       speed=1.05, pause=(0.6, 1.8)),
     },
     'country': {
         'title': 'GREEN VALLEY',
@@ -116,6 +119,8 @@ THEMES = {
         'close': [('obj_fence', 1.4, 1.12, 1.26),
                   ('obj_bush', 1.0, 1.14, 1.30)],
         'density': 0.36,
+        'animal': dict(key='horse', name='HORSE', body=0.27,
+                       speed=0.75, pause=(1.0, 2.5)),
     },
     'desert': {
         'title': 'DUST HIGHWAY',
@@ -140,6 +145,8 @@ THEMES = {
         'close': [('obj_rock_small', 1.0, 1.10, 1.22),
                   ('obj_skull', 0.6, 1.06, 1.18)],
         'density': 0.28,
+        'animal': dict(key='camel', name='CAMEL', body=0.30,
+                       speed=0.55, pause=(1.5, 3.0)),
     },
     'winter': {
         'title': 'FROST PASS',
@@ -163,6 +170,8 @@ THEMES = {
         'close': [('obj_snowpole', 0.9, 1.07, 1.16),
                   ('obj_snowbank', 1.3, 1.08, 1.30)],
         'density': 0.38,
+        'animal': dict(key='polarbear', name='POLAR BEAR', body=0.34,
+                       speed=0.50, pause=(1.5, 3.0)),
     },
     'summer': {
         'title': 'ALPINE CREST',
@@ -186,6 +195,8 @@ THEMES = {
         'close': [('obj_tyrewall', 1.0, 1.06, 1.14),
                   ('obj_pine_small', 1.5, 1.20, 1.40)],
         'density': 0.34,
+        'animal': dict(key='doe', name='DOE', body=0.20,
+                       speed=0.95, pause=(0.8, 2.0)),
     },
 }
 

@@ -869,6 +869,178 @@ def gen_scenery():
 
 
 # --------------------------------------------------------------------------
+# Wildlife - roadside animals that wander across the track
+# --------------------------------------------------------------------------
+
+def _legs(s, positions, ground, leg_w, leg_h, color, frame):
+    """Four legs, staggered front/back for a simple two-frame walk cycle."""
+    dark = shade(color, 0.7)
+    for i, lx in enumerate(positions):
+        stagger = leg_h * 0.18
+        up = (i % 2 == 0) if frame == 0 else (i % 2 == 1)
+        ly = ground - leg_h + (0 if up else stagger)
+        rect(s, dark, lx - leg_w / 2, ly, leg_w, leg_h - (0 if up else stagger))
+
+
+def draw_camel(w=112, h=76, frame=0):
+    s = surf(w, h)
+    body, dark = (196, 158, 104), (156, 122, 76)
+    ground = h * 0.86
+    body_x, body_y = w * 0.16, h * 0.36
+    body_w, body_h = w * 0.56, h * 0.30
+    pygame.draw.ellipse(s, body, (body_x, body_y, body_w, body_h))
+    pygame.draw.ellipse(s, dark, (body_x + body_w * 0.22,
+                                  body_y - body_h * 0.62, body_w * 0.42,
+                                  body_h * 0.9))
+    pygame.draw.ellipse(s, body, (body_x + body_w * 0.24,
+                                  body_y - body_h * 0.5, body_w * 0.38,
+                                  body_h * 0.7))
+    neck_x = body_x + body_w * 0.94
+    poly(s, body, [(neck_x, body_y + body_h * 0.2),
+                   (neck_x + w * 0.16, body_y - h * 0.30),
+                   (neck_x + w * 0.24, body_y - h * 0.26),
+                   (neck_x + w * 0.10, body_y + body_h * 0.5)])
+    head_x, head_y = neck_x + w * 0.20, body_y - h * 0.32
+    pygame.draw.ellipse(s, body, (head_x, head_y, w * 0.16, h * 0.16))
+    rect(s, dark, head_x + w * 0.05, head_y + h * 0.02, w * 0.03, h * 0.03)
+    tail_x = body_x
+    poly(s, dark, [(tail_x, body_y + body_h * 0.3),
+                   (tail_x - w * 0.06, body_y + body_h * 1.1),
+                   (tail_x - w * 0.02, body_y + body_h * 1.15)])
+    _legs(s, [body_x + body_w * 0.14, body_x + body_w * 0.34,
+              body_x + body_w * 0.64, body_x + body_w * 0.84],
+          ground, w * 0.045, h * 0.30, dark, frame)
+    return s
+
+
+def draw_polar_bear(w=104, h=64, frame=0):
+    s = surf(w, h)
+    body, dark, snout = (238, 240, 244), (196, 200, 212), (60, 58, 56)
+    ground = h * 0.90
+    body_x, body_y = w * 0.14, h * 0.38
+    body_w, body_h = w * 0.62, h * 0.36
+    pygame.draw.ellipse(s, body, (body_x, body_y, body_w, body_h))
+    head_x, head_y = body_x + body_w * 0.82, body_y - body_h * 0.10
+    pygame.draw.ellipse(s, body, (head_x, head_y, w * 0.26, h * 0.30))
+    ear_r = max(2, int(w * 0.035))
+    for ex in (head_x + w * 0.04, head_x + w * 0.16):
+        pygame.draw.circle(s, body, (int(ex), int(head_y + 2)), ear_r)
+        pygame.draw.circle(s, dark, (int(ex), int(head_y + 2)),
+                           max(1, ear_r - 2))
+    pygame.draw.ellipse(s, snout, (head_x + w * 0.20, head_y + h * 0.16,
+                                   w * 0.09, h * 0.09))
+    pygame.draw.circle(s, snout, (int(head_x + w * 0.12), int(head_y + h * 0.10)),
+                       max(1, int(w * 0.012)))
+    poly(s, dark, [(body_x + body_w * 0.04, body_y + body_h * 0.5),
+                   (body_x - w * 0.03, body_y + body_h * 0.7),
+                   (body_x + body_w * 0.10, body_y + body_h * 0.85)])
+    _legs(s, [body_x + body_w * 0.16, body_x + body_w * 0.36,
+              body_x + body_w * 0.66, body_x + body_w * 0.86],
+          ground, w * 0.07, h * 0.22, dark, frame)
+    return s
+
+
+def draw_horse(w=108, h=78, frame=0):
+    s = surf(w, h)
+    body, dark, mane = (120, 78, 48), (92, 58, 34), (54, 36, 24)
+    ground = h * 0.88
+    body_x, body_y = w * 0.16, h * 0.34
+    body_w, body_h = w * 0.56, h * 0.26
+    pygame.draw.ellipse(s, body, (body_x, body_y, body_w, body_h))
+    neck_x = body_x + body_w * 0.92
+    poly(s, body, [(neck_x, body_y + body_h * 0.1),
+                   (neck_x + w * 0.14, body_y - h * 0.34),
+                   (neck_x + w * 0.24, body_y - h * 0.28),
+                   (neck_x + w * 0.08, body_y + body_h * 0.6)])
+    poly(s, mane, [(neck_x + w * 0.02, body_y - h * 0.02),
+                   (neck_x + w * 0.16, body_y - h * 0.32),
+                   (neck_x + w * 0.20, body_y - h * 0.28),
+                   (neck_x + w * 0.06, body_y + h * 0.02)])
+    head_x, head_y = neck_x + w * 0.16, body_y - h * 0.38
+    pygame.draw.ellipse(s, body, (head_x, head_y, w * 0.20, h * 0.16))
+    tail_x = body_x
+    poly(s, mane, [(tail_x + w * 0.02, body_y + body_h * 0.1),
+                   (tail_x - w * 0.08, body_y + body_h * 1.4),
+                   (tail_x + w * 0.03, body_y + body_h * 1.45)])
+    _legs(s, [body_x + body_w * 0.12, body_x + body_w * 0.30,
+              body_x + body_w * 0.66, body_x + body_w * 0.84],
+          ground, w * 0.045, h * 0.40, dark, frame)
+    return s
+
+
+def draw_doe(w=84, h=68, frame=0):
+    s = surf(w, h)
+    body, dark, patch = (168, 122, 78), (132, 92, 56), (238, 232, 218)
+    ground = h * 0.88
+    body_x, body_y = w * 0.16, h * 0.38
+    body_w, body_h = w * 0.52, h * 0.24
+    pygame.draw.ellipse(s, body, (body_x, body_y, body_w, body_h))
+    pygame.draw.ellipse(s, patch, (body_x + body_w * 0.72, body_y + body_h * 0.2,
+                                   body_w * 0.24, body_h * 0.6))
+    neck_x = body_x + body_w * 0.9
+    poly(s, body, [(neck_x, body_y + body_h * 0.1),
+                   (neck_x + w * 0.12, body_y - h * 0.30),
+                   (neck_x + w * 0.20, body_y - h * 0.24),
+                   (neck_x + w * 0.06, body_y + body_h * 0.6)])
+    head_x, head_y = neck_x + w * 0.12, body_y - h * 0.36
+    pygame.draw.ellipse(s, body, (head_x, head_y, w * 0.18, h * 0.16))
+    for side in (-1, 1):
+        ex = head_x + w * 0.09 + side * w * 0.04
+        ey = head_y - h * 0.02
+        pygame.draw.ellipse(s, dark, (ex - w * 0.015, ey - h * 0.05,
+                                      w * 0.05, h * 0.07))
+    tail_x = body_x
+    poly(s, patch, [(tail_x + w * 0.02, body_y + body_h * 0.2),
+                    (tail_x - w * 0.05, body_y + body_h * 0.9),
+                    (tail_x + w * 0.05, body_y + body_h * 0.95)])
+    _legs(s, [body_x + body_w * 0.12, body_x + body_w * 0.32,
+              body_x + body_w * 0.64, body_x + body_w * 0.84],
+          ground, w * 0.04, h * 0.42, dark, frame)
+    return s
+
+
+def draw_dog(w=64, h=46, frame=0):
+    s = surf(w, h)
+    body, dark = (176, 132, 78), (140, 100, 56)
+    ground = h * 0.86
+    body_x, body_y = w * 0.14, h * 0.34
+    body_w, body_h = w * 0.54, h * 0.28
+    pygame.draw.ellipse(s, body, (body_x, body_y, body_w, body_h))
+    neck_x = body_x + body_w * 0.88
+    head_x, head_y = neck_x, body_y - h * 0.06
+    pygame.draw.ellipse(s, body, (head_x, head_y, w * 0.24, h * 0.24))
+    poly(s, dark, [(head_x + w * 0.16, head_y + h * 0.02),
+                   (head_x + w * 0.05, head_y - h * 0.14),
+                   (head_x + w * 0.20, head_y - h * 0.06)])
+    rect(s, dark, head_x + w * 0.20, head_y + h * 0.10, w * 0.05, h * 0.04)
+    tail_x = body_x
+    poly(s, dark, [(tail_x, body_y + body_h * 0.2),
+                   (tail_x - w * 0.10, body_y - body_h * 0.4),
+                   (tail_x - w * 0.02, body_y - body_h * 0.5),
+                   (tail_x + w * 0.06, body_y + body_h * 0.1)])
+    _legs(s, [body_x + body_w * 0.14, body_x + body_w * 0.36,
+              body_x + body_w * 0.62, body_x + body_w * 0.84],
+          ground, w * 0.06, h * 0.30, dark, frame)
+    return s
+
+
+def gen_animals():
+    names = []
+    builders = {
+        'camel': draw_camel,
+        'polarbear': draw_polar_bear,
+        'horse': draw_horse,
+        'doe': draw_doe,
+        'dog': draw_dog,
+    }
+    for key, build in builders.items():
+        for frame in (0, 1):
+            img = build(frame=frame)
+            names.append(save(img, 'obj_animal_%s_%d' % (key, frame)))
+    return names
+
+
+# --------------------------------------------------------------------------
 # Parallax backdrops
 # --------------------------------------------------------------------------
 
@@ -1081,6 +1253,7 @@ def main():
     n = []
     n += gen_cars()
     n += gen_scenery()
+    n += gen_animals()
     n += gen_backgrounds()
     n += gen_effects()
     print('generated %d sprites -> %s' % (len(n), OUT))
