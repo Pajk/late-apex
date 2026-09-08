@@ -78,6 +78,38 @@ class Rival:
 
 
 _PREFIX = {'rival': 'car_rival', 'oncoming': 'car_onc', 'truck': 'car_truck'}
+CRITTER_EDGE = 1.3     # how far into the verge on each side it wanders from
+CRITTER_FRAME_TIME = 0.14
+
+
+class Critter:
+    """An animal that wanders back and forth across the road at a fixed
+    point on the circuit, pausing at each verge before crossing again -
+    a fixed hazard you learn to expect rather than a moving rival."""
+
+    __slots__ = ('z', 'offset', 'dir', 'speed', 'pause', 'frame', 'frame_t',
+                 'key', 'name', 'size', 'body', 'seg', 'hit', 'pause_range')
+
+    def __init__(self, z, key, name, body, speed, pause_range, size,
+                 start_dir=1):
+        self.z = z
+        self.key = key
+        self.name = name
+        self.body = body
+        self.speed = speed
+        self.pause_range = pause_range
+        self.size = size
+        self.dir = start_dir
+        self.offset = -CRITTER_EDGE if start_dir > 0 else CRITTER_EDGE
+        self.pause = 0.0
+        self.frame = 0
+        self.frame_t = 0.0
+        self.seg = None
+        self.hit = False
+
+    @property
+    def sprite(self):
+        return 'obj_animal_%s_%d' % (self.key, self.frame)
 
 
 class Player:
@@ -137,6 +169,7 @@ class Race:
         self.player.turbo = self.car.get('turbos', 3)
         self.cars = []
         self.traffic = []
+        self.critters = []
         self.rival_count = track.rivals
         self.state = self.STATE_COUNTDOWN
         self.countdown = 3.9
@@ -161,6 +194,7 @@ class Race:
         self.tune = ''
         self.gear = 1
         self._spawn_rivals()
+        self._spawn_animals()
         self._init_weather()
         self.audio.set_engine(self.car.get('engine', 'v8'))
 
@@ -214,6 +248,32 @@ class Race:
         seg.cars.append(car)
         car.seg = seg
 
+    def _spawn_animals(self):
+        """A handful of fixed crossing points, spread around the lap, where
+        the track's native wildlife wanders on and off the road. How many
+        there are and how fast they cross both scale with the difficulty."""
+        spec = self.track.theme.get('animal')
+        if not spec:
+            return
+        size = self._sprite_size('obj_animal_%s_0' % spec['key'], spec['body'])
+        n = max(1, int(round(3 * self.level['animals'])))
+        for i in range(n):
+            z = (i + 1) * (self.track.length / (n + 1.0)) + 2600
+            start_dir = 1 if self.rng.random() < 0.5 else -1
+            critter = Critter(z % self.track.length, spec['key'],
+                              spec['name'], spec['body'],
+                              spec['speed'] * self.level['animal_speed'],
+                              spec['pause'], size, start_dir=start_dir)
+            critter.pause = self.rng.uniform(*spec['pause'])
+            critter.offset = self.rng.uniform(-CRITTER_EDGE, CRITTER_EDGE)
+            self._attach_animal(critter)
+            self.critters.append(critter)
+
+    def _attach_animal(self, critter):
+        seg = self.track.segment_at(critter.z)
+        seg.animals.append(critter)
+        critter.seg = seg
+
     def _init_weather(self):
         kind = self.track.theme['weather']
         if not kind:
@@ -231,6 +291,10 @@ class Race:
             if car.seg is not None and car in car.seg.cars:
                 car.seg.cars.remove(car)
             car.seg = None
+        for critter in self.critters:
+            if critter.seg is not None and critter in critter.seg.animals:
+                critter.seg.animals.remove(critter)
+            critter.seg = None
 
     # -- helpers --------------------------------------------------------
     def message(self, text, ttl=1.6, colour=(255, 236, 120), big=True):
@@ -293,12 +357,14 @@ class Race:
             self.revs += (target - self.revs) * min(1.0, dt * 7.0)
             self.audio.engine(self.revs, 0.25 + 0.45 * self.revs)
             self._advance_rivals(dt, idle=True)
+            self._advance_critters(dt, idle=True)
             return
 
         if self.state in (self.STATE_FINISHED, self.STATE_TIMEUP):
             p.speed = max(0.0, p.speed + DECEL * dt * 2.4)
             p.z = (p.z + p.speed * dt) % track.length
             self._advance_rivals(dt)
+            self._advance_critters(dt)
             return
 
         # ---- timers
@@ -355,6 +421,7 @@ class Race:
             p.speed = min(p.speed, self.top_speed)
 
         self._collide_cars(seg)
+        self._collide_animals(seg)
         p.x = clamp(p.x, -2.4, 2.4)
 
         # ---- advance
@@ -366,6 +433,7 @@ class Race:
         p.total += p.speed * dt
 
         self._advance_rivals(dt)
+        self._advance_critters(dt)
         self._update_position()
 
         # ---- camera / parallax
@@ -490,6 +558,33 @@ class Race:
             return -rate
         return 0.0
 
+    def _advance_critters(self, dt, idle=False):
+        """Animals hold a fixed spot on the circuit but wander back and
+        forth across it, pausing at each verge before crossing again."""
+        for critter in self.critters:
+            if idle:
+                continue
+            if critter.pause > 0:
+                critter.pause -= dt
+                critter.frame = 0
+                critter.frame_t = 0.0
+                continue
+            critter.offset += critter.dir * critter.speed * dt
+            if critter.offset >= CRITTER_EDGE:
+                critter.offset = CRITTER_EDGE
+                critter.dir = -1
+                critter.pause = self.rng.uniform(*critter.pause_range)
+                critter.hit = False
+            elif critter.offset <= -CRITTER_EDGE:
+                critter.offset = -CRITTER_EDGE
+                critter.dir = 1
+                critter.pause = self.rng.uniform(*critter.pause_range)
+                critter.hit = False
+            critter.frame_t += dt
+            if critter.frame_t >= CRITTER_FRAME_TIME:
+                critter.frame_t = 0.0
+                critter.frame = 1 - critter.frame
+
     def _collide_scenery(self, seg):
         p = self.player
         for offset, name, sc, collides in seg.sprites:
@@ -530,6 +625,25 @@ class Race:
                     for _ in range(9):
                         self._smoke()
                 p.z = max(0.0, p.z - SEGMENT_LENGTH * 1.2)
+                return
+
+    def _collide_animals(self, seg):
+        p = self.player
+        for critter in seg.animals:
+            if critter.hit:
+                continue
+            if overlap(p.x, self.car_body, critter.offset,
+                       critter.body * self._widen, 0.8):
+                critter.hit = True
+                mass = clamp(self.car['mass'], 0.8, 1.5)
+                p.speed *= clamp(0.62 + 0.10 * (mass - 1.0), 0.45, 0.80)
+                p.x += 0.18 if p.x > critter.offset else -0.18
+                self.shake = max(self.shake, 4.5)
+                self.audio.play('sfx_crash', 0.75)
+                self.message('HIT A %s!' % critter.name, 1.4,
+                            (255, 170, 90))
+                for _ in range(10):
+                    self._smoke()
                 return
 
     def _crash(self, offset):

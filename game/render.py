@@ -304,6 +304,15 @@ class Renderer:
                 self._blit_sprite(img, car.sprite, px, sy, w, h, seg.clip,
                                   fog_i, fog_color)
 
+            for critter in seg.animals:
+                img = a.get(critter.sprite)
+                cs = critter.size * OBJECT_SCALE
+                w = img.get_width() * scale * WIDTH / 2 * cs
+                h = img.get_height() * scale * WIDTH / 2 * cs
+                px = sx + scale * critter.offset * road_width * WIDTH / 2
+                self._blit_sprite(img, critter.sprite, px, sy, w, h,
+                                  seg.clip, fog_i, fog_color)
+
             for offset, name, sc, _c in seg.sprites:
                 img = a.get(name)
                 ss = sc * OBJECT_SCALE
